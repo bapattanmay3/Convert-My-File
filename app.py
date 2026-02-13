@@ -35,6 +35,7 @@ def compressor():
 
 @app.route('/convert', methods=['POST'])
 def convert_file():
+    """Handle file conversions (PDF, DOCX, TXT)"""
     if 'file' not in request.files:
         return jsonify({'success': False, 'error': 'No file uploaded'}), 400
     
@@ -55,62 +56,70 @@ def convert_file():
     output_filename = f"converted_{unique_id}_{base_name}.{target_format}"
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
     
-    # Convert based on file type and target format
+    # Get file extension
     ext = os.path.splitext(filename)[1].lower().replace('.', '')
     
+    # Import converter functions
     from converter import FILE_CONVERSIONS
     
+    # Check if conversion is supported
     if ext in FILE_CONVERSIONS and target_format in FILE_CONVERSIONS[ext]:
-        conversion_func = FILE_CONVERSIONS[ext][target_format]
-        success, message = conversion_func(input_path, output_path)
+        success, message = FILE_CONVERSIONS[ext][target_format](input_path, output_path)
+        
+        if success and os.path.exists(output_path):
+            return jsonify({
+                'success': True,
+                'message': message,
+                'download_url': f'/download/{output_filename}',
+                'filename': output_filename
+            })
+        else:
+            return jsonify({'success': False, 'error': message}), 500
     else:
-        return jsonify({'success': False, 'error': f'Unsupported conversion: {ext} to {target_format}'}), 400
-    
-    if success:
-        return jsonify({
-            'success': True,
-            'message': message,
-            'download_url': f'/download/{output_filename}'
-        })
-    else:
-        return jsonify({'success': False, 'error': message}), 500
+        return jsonify({'success': False, 'error': f'Conversion from {ext} to {target_format} is not supported'}), 400
 
 @app.route('/convert-image', methods=['POST'])
-def convert_image_route():
+def convert_image():
+    """Handle image conversions (JPG, PNG, WebP, PDF)"""
     if 'file' not in request.files:
-        return jsonify({'success': False, 'error': 'No image uploaded'}), 400
+        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
     
     file = request.files['file']
     if file.filename == '':
-        return jsonify({'success': False, 'error': 'No image selected'}), 400
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
     
     target_format = request.form.get('format', 'jpg')
     quality = int(request.form.get('quality', 90))
     
+    # Save uploaded file
     filename = secure_filename(file.filename)
     unique_id = str(uuid.uuid4())
     input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
     file.save(input_path)
     
+    # Generate output filename
     base_name = os.path.splitext(filename)[0]
     output_filename = f"converted_{unique_id}_{base_name}.{target_format}"
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
     
+    # Get file extension
+    ext = os.path.splitext(filename)[1].lower().replace('.', '')
+    
+    # Import converter functions
     from converter import convert_image_to_image, convert_image_to_pdf
     
-    success = False
-    message = ""
-    
+    # Handle conversion
     if target_format == 'pdf':
         success, message = convert_image_to_pdf(input_path, output_path)
     else:
         success, message = convert_image_to_image(input_path, output_path, target_format, quality)
-        
-    if success:
+    
+    if success and os.path.exists(output_path):
         return jsonify({
             'success': True,
             'message': message,
-            'download_url': f'/download/{output_filename}'
+            'download_url': f'/download/{output_filename}',
+            'filename': output_filename
         })
     else:
         return jsonify({'success': False, 'error': message}), 500
