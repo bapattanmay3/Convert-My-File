@@ -2,101 +2,458 @@
 {% block content %}
 <div class="tool-container">
     <div class="tool-header">
-        <h1>🔄 File Converter</h1>
-        <p>Convert PDF, DOCX, and Images</p>
+        <h1>🔄 File & Image Converter</h1>
+        <p>Convert any file or image to any format</p>
     </div>
 
-    <div class="converter-card">
-        <div class="upload-area" id="dropArea">
-            <div class="upload-content">
-                <span class="upload-icon">📁</span>
-                <h3>Drag & Drop or Click to Upload</h3>
-                <p>Supported: PDF, DOCX, JPG, PNG (Max 50MB)</p>
-                <input type="file" id="fileInput" hidden>
-                <button class="btn btn-primary" id="browseBtn">Choose File</button>
+    <!-- ============ TAB SWITCHER ============ -->
+    <div class="converter-tabs">
+        <button id="tabFile" class="tab-btn active">📄 File Converter</button>
+        <button id="tabImage" class="tab-btn">🖼️ Image Converter</button>
+    </div>
+
+    <!-- ============ FILE CONVERTER SECTION ============ -->
+    <div id="fileSection" class="converter-section active">
+        <div class="section-header">
+            <h2>📄 File Converter</h2>
+            <p>Convert documents between PDF, Word, and Text formats</p>
+        </div>
+
+        <div class="converter-card">
+            <!-- Upload Area -->
+            <div class="upload-area" id="fileDropArea">
+                <div class="upload-content">
+                    <span class="upload-icon">📁</span>
+                    <h3>Drag & Drop or Click to Upload</h3>
+                    <p>Supported: PDF, DOCX, TXT (Max 50MB)</p>
+                    <input type="file" id="fileInput" accept=".pdf,.docx,.txt" hidden>
+                    <button class="btn btn-primary" id="fileBrowseBtn">Choose File</button>
+                </div>
             </div>
+
+            <!-- File Info -->
+            <div id="fileInfo" class="file-info" style="display: none;">
+                <div class="file-details">
+                    <span class="file-icon">📄</span>
+                    <div class="file-meta">
+                        <strong id="fileFileName"></strong>
+                        <span id="fileFileSize"></span>
+                    </div>
+                    <button id="fileRemoveBtn" class="btn-icon">✖</button>
+                </div>
+            </div>
+
+            <!-- Conversion Options -->
+            <div id="fileOptions" class="convert-options" style="display: none;">
+                <div class="option-group">
+                    <label>Convert to:</label>
+                    <select id="fileFormatSelect" class="form-select">
+                        <option value="docx">Word Document (.docx)</option>
+                        <option value="pdf">PDF Document (.pdf)</option>
+                        <option value="txt">Text File (.txt)</option>
+                    </select>
+                </div>
+
+                <button id="fileConvertBtn" class="btn btn-success btn-large">
+                    🔄 Convert File
+                </button>
+            </div>
+
+            <!-- Result -->
+            <div id="fileResult" class="result-area" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- ============ IMAGE CONVERTER SECTION ============ -->
+    <div id="imageSection" class="converter-section">
+        <div class="section-header">
+            <h2>🖼️ Image Converter</h2>
+            <p>Convert images between JPG, PNG, WebP, PDF and more</p>
         </div>
 
-        <div id="fileInfo" class="file-info" style="display: none;">
-            <p><strong>File:</strong> <span id="fileName"></span></p>
-            <p><strong>Size:</strong> <span id="fileSize"></span></p>
+        <div class="converter-card">
+            <!-- Upload Area -->
+            <div class="upload-area" id="imageDropArea">
+                <div class="upload-content">
+                    <span class="upload-icon">🖼️</span>
+                    <h3>Drag & Drop or Click to Upload</h3>
+                    <p>Supported: JPG, PNG, WebP, GIF, BMP (Max 50MB)</p>
+                    <input type="file" id="imageInput" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp" hidden>
+                    <button class="btn btn-primary" id="imageBrowseBtn">Choose Image</button>
+                </div>
+            </div>
+
+            <!-- File Info -->
+            <div id="imageInfo" class="file-info" style="display: none;">
+                <div class="file-details">
+                    <span class="file-icon">🖼️</span>
+                    <div class="file-meta">
+                        <strong id="imageFileName"></strong>
+                        <span id="imageFileSize"></span>
+                    </div>
+                    <button id="imageRemoveBtn" class="btn-icon">✖</button>
+                </div>
+            </div>
+
+            <!-- Conversion Options -->
+            <div id="imageOptions" class="convert-options" style="display: none;">
+                <div class="option-group">
+                    <label>Convert to:</label>
+                    <select id="imageFormatSelect" class="form-select">
+                        <option value="jpg">JPEG Image (.jpg)</option>
+                        <option value="png">PNG Image (.png)</option>
+                        <option value="webp">WebP Image (.webp)</option>
+                        <option value="pdf">PDF Document (.pdf)</option>
+                    </select>
+                </div>
+
+                <div class="option-group">
+                    <label>Quality:</label>
+                    <input type="range" id="imageQuality" min="1" max="100" value="90">
+                    <span id="qualityValue">90%</span>
+                </div>
+
+                <button id="imageConvertBtn" class="btn btn-success btn-large">
+                    🔄 Convert Image
+                </button>
+            </div>
+
+            <!-- Result -->
+            <div id="imageResult" class="result-area" style="display: none;"></div>
         </div>
-
-        <div class="convert-options">
-            <label>Convert to:</label>
-            <select id="formatSelect" class="form-select">
-                <option value="docx">Word Document (.docx)</option>
-                <option value="pdf">PDF (.pdf)</option>
-                <option value="jpg">JPEG Image (.jpg)</option>
-            </select>
-
-            <button id="convertBtn" class="btn btn-success" disabled>
-                🔄 Convert File
-            </button>
-        </div>
-
-        <div id="result" style="display: none;"></div>
     </div>
 </div>
 
+<style>
+    .converter-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 30px;
+        justify-content: center;
+    }
+
+    .tab-btn {
+        padding: 12px 30px;
+        border: none;
+        border-radius: 30px;
+        background: rgba(255, 255, 255, 0.05);
+        color: #aaa;
+        font-size: 1.1rem;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .tab-btn.active {
+        background: var(--primary);
+        color: white;
+    }
+
+    .converter-section {
+        display: none;
+    }
+
+    .converter-section.active {
+        display: block;
+    }
+
+    .section-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .section-header h2 {
+        color: var(--primary);
+        margin-bottom: 10px;
+    }
+
+    .file-details {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+    }
+
+    .file-icon {
+        font-size: 2rem;
+    }
+
+    .file-meta {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .file-meta strong {
+        color: white;
+        margin-bottom: 5px;
+    }
+
+    .file-meta span {
+        color: #aaa;
+        font-size: 0.9rem;
+    }
+
+    .btn-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: transparent;
+        color: #aaa;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .btn-icon:hover {
+        background: rgba(255, 107, 74, 0.2);
+        color: var(--primary);
+    }
+
+    .option-group {
+        margin: 20px 0;
+    }
+
+    .option-group label {
+        display: block;
+        margin-bottom: 10px;
+        color: white;
+    }
+
+    .form-select {
+        width: 100%;
+        padding: 12px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 107, 74, 0.3);
+        color: white;
+    }
+
+    #imageQuality {
+        width: 70%;
+        margin-right: 15px;
+    }
+
+    #qualityValue {
+        color: var(--primary);
+        font-weight: bold;
+    }
+
+    .result-area {
+        margin-top: 20px;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+    }
+
+    .success {
+        background: rgba(76, 175, 80, 0.1);
+        border: 1px solid #4CAF50;
+        color: #4CAF50;
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    .error {
+        background: rgba(244, 67, 54, 0.1);
+        border: 1px solid #F44336;
+        color: #F44336;
+        padding: 15px;
+        border-radius: 8px;
+    }
+</style>
+
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const dropArea = document.getElementById('dropArea');
+        // ============ TAB SWITCHING ============
+        const tabFile = document.getElementById('tabFile');
+        const tabImage = document.getElementById('tabImage');
+        const fileSection = document.getElementById('fileSection');
+        const imageSection = document.getElementById('imageSection');
+
+        tabFile.addEventListener('click', function () {
+            tabFile.classList.add('active');
+            tabImage.classList.remove('active');
+            fileSection.classList.add('active');
+            imageSection.classList.remove('active');
+        });
+
+        tabImage.addEventListener('click', function () {
+            tabImage.classList.add('active');
+            tabFile.classList.remove('active');
+            imageSection.classList.add('active');
+            fileSection.classList.remove('active');
+        });
+
+        // ============ FILE CONVERTER LOGIC ============
+        const fileDropArea = document.getElementById('fileDropArea');
         const fileInput = document.getElementById('fileInput');
-        const browseBtn = document.getElementById('browseBtn');
+        const fileBrowseBtn = document.getElementById('fileBrowseBtn');
         const fileInfo = document.getElementById('fileInfo');
-        const fileName = document.getElementById('fileName');
-        const fileSize = document.getElementById('fileSize');
-        const convertBtn = document.getElementById('convertBtn');
-        const formatSelect = document.getElementById('formatSelect');
-        const result = document.getElementById('result');
+        const fileFileName = document.getElementById('fileFileName');
+        const fileFileSize = document.getElementById('fileFileSize');
+        const fileRemoveBtn = document.getElementById('fileRemoveBtn');
+        const fileOptions = document.getElementById('fileOptions');
+        const fileFormatSelect = document.getElementById('fileFormatSelect');
+        const fileConvertBtn = document.getElementById('fileConvertBtn');
+        const fileResult = document.getElementById('fileResult');
 
-        let selectedFile = null;
+        let fileSelectedFile = null;
 
-        browseBtn.onclick = () => fileInput.click();
+        fileBrowseBtn.onclick = () => fileInput.click();
 
         fileInput.onchange = (e) => {
             if (e.target.files[0]) {
-                selectedFile = e.target.files[0];
-                fileName.textContent = selectedFile.name;
-                fileSize.textContent = (selectedFile.size / 1024).toFixed(2) + ' KB';
+                fileSelectedFile = e.target.files[0];
+                fileFileName.textContent = fileSelectedFile.name;
+                fileFileSize.textContent = (fileSelectedFile.size / 1024).toFixed(2) + ' KB';
                 fileInfo.style.display = 'block';
-                convertBtn.disabled = false;
+                fileOptions.style.display = 'block';
+                fileDropArea.style.display = 'none';
+
+                // Filter format options based on input file
+                const ext = fileSelectedFile.name.split('.').pop().toLowerCase();
+                Array.from(fileFormatSelect.options).forEach(opt => {
+                    if (ext === 'pdf' && opt.value === 'pdf') opt.style.display = 'none';
+                    else if (ext === 'docx' && opt.value === 'docx') opt.style.display = 'none';
+                    else if (ext === 'txt' && opt.value === 'txt') opt.style.display = 'none';
+                    else opt.style.display = 'block';
+                });
             }
         };
 
-        convertBtn.onclick = async () => {
-            if (!selectedFile) return;
+        fileRemoveBtn.onclick = function () {
+            fileSelectedFile = null;
+            fileInfo.style.display = 'none';
+            fileOptions.style.display = 'none';
+            fileDropArea.style.display = 'block';
+            fileInput.value = '';
+            fileResult.style.display = 'none';
+        };
+
+        fileConvertBtn.onclick = async function () {
+            if (!fileSelectedFile) return;
 
             const formData = new FormData();
-            formData.append('file', selectedFile);
-            formData.append('format', formatSelect.value);
+            formData.append('file', fileSelectedFile);
+            formData.append('format', fileFormatSelect.value);
+            formData.append('type', 'file');
 
-            convertBtn.disabled = true;
-            convertBtn.textContent = 'Converting...';
+            fileConvertBtn.disabled = true;
+            fileConvertBtn.innerHTML = '⏳ Converting...';
 
             try {
                 const response = await fetch('/convert', {
                     method: 'POST',
                     body: formData
                 });
-
                 const data = await response.json();
 
                 if (data.success) {
-                    result.innerHTML = `<div class="success">
-                    ✅ Conversion successful! 
-                    <a href="${data.download_url}" class="btn btn-small">Download</a>
+                    fileResult.innerHTML = `<div class="success">
+                    ✅ ${data.message}<br>
+                    <a href="${data.download_url}" class="btn btn-small" style="margin-top: 10px;">⬇️ Download</a>
                 </div>`;
                 } else {
-                    result.innerHTML = `<div class="error">❌ ${data.error}</div>`;
+                    fileResult.innerHTML = `<div class="error">❌ ${data.error}</div>`;
                 }
             } catch (error) {
-                result.innerHTML = `<div class="error">❌ Network error</div>`;
+                fileResult.innerHTML = `<div class="error">❌ Network error. Please try again.</div>`;
             } finally {
-                convertBtn.disabled = false;
-                convertBtn.textContent = '🔄 Convert File';
-                result.style.display = 'block';
+                fileConvertBtn.disabled = false;
+                fileConvertBtn.innerHTML = '🔄 Convert File';
+                fileResult.style.display = 'block';
+            }
+        };
+
+        // ============ IMAGE CONVERTER LOGIC ============
+        const imageDropArea = document.getElementById('imageDropArea');
+        const imageInput = document.getElementById('imageInput');
+        const imageBrowseBtn = document.getElementById('imageBrowseBtn');
+        const imageInfo = document.getElementById('imageInfo');
+        const imageFileName = document.getElementById('imageFileName');
+        const imageFileSize = document.getElementById('imageFileSize');
+        const imageRemoveBtn = document.getElementById('imageRemoveBtn');
+        const imageOptions = document.getElementById('imageOptions');
+        const imageFormatSelect = document.getElementById('imageFormatSelect');
+        const imageQuality = document.getElementById('imageQuality');
+        const qualityValue = document.getElementById('qualityValue');
+        const imageConvertBtn = document.getElementById('imageConvertBtn');
+        const imageResult = document.getElementById('imageResult');
+
+        let imageSelectedFile = null;
+
+        imageQuality.oninput = function () {
+            qualityValue.textContent = this.value + '%';
+        };
+
+        imageBrowseBtn.onclick = () => imageInput.click();
+
+        imageInput.onchange = (e) => {
+            if (e.target.files[0]) {
+                imageSelectedFile = e.target.files[0];
+                imageFileName.textContent = imageSelectedFile.name;
+                imageFileSize.textContent = (imageSelectedFile.size / 1024).toFixed(2) + ' KB';
+                imageInfo.style.display = 'block';
+                imageOptions.style.display = 'block';
+                imageDropArea.style.display = 'none';
+
+                // Filter format options (can't convert to same format)
+                const ext = imageSelectedFile.name.split('.').pop().toLowerCase();
+                Array.from(imageFormatSelect.options).forEach(opt => {
+                    if (ext === opt.value || (ext === 'jpg' && opt.value === 'jpeg') ||
+                        (ext === 'jpeg' && opt.value === 'jpg')) {
+                        opt.style.display = 'none';
+                    } else {
+                        opt.style.display = 'block';
+                    }
+                });
+            }
+        };
+
+        imageRemoveBtn.onclick = function () {
+            imageSelectedFile = null;
+            imageInfo.style.display = 'none';
+            imageOptions.style.display = 'none';
+            imageDropArea.style.display = 'block';
+            imageInput.value = '';
+            imageResult.style.display = 'none';
+        };
+
+        imageConvertBtn.onclick = async function () {
+            if (!imageSelectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', imageSelectedFile);
+            formData.append('format', imageFormatSelect.value);
+            formData.append('quality', imageQuality.value);
+            formData.append('type', 'image');
+
+            imageConvertBtn.disabled = true;
+            imageConvertBtn.innerHTML = '⏳ Converting...';
+
+            try {
+                const response = await fetch('/convert-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    imageResult.innerHTML = `<div class="success">
+                    ✅ ${data.message}<br>
+                    <a href="${data.download_url}" class="btn btn-small" style="margin-top: 10px;">⬇️ Download</a>
+                </div>`;
+                } else {
+                    imageResult.innerHTML = `<div class="error">❌ ${data.error}</div>`;
+                }
+            } catch (error) {
+                imageResult.innerHTML = `<div class="error">❌ Network error. Please try again.</div>`;
+            } finally {
+                imageConvertBtn.disabled = false;
+                imageConvertBtn.innerHTML = '🔄 Convert Image';
+                imageResult.style.display = 'block';
             }
         };
     });
