@@ -297,10 +297,8 @@ def translate():
     # Get extension
     ext = os.path.splitext(filename)[1].lower().replace('.', '')
     
-    # Generate output name
-    # For PDF, we translate to TXT for simplicity in this version
-    # For others (DOCX, XLSX, XLS, CSV, TXT), we preserve the extension
-    target_ext = 'txt' if ext == 'pdf' else ext
+    # Preserve the original extension for all formats
+    target_ext = ext
     output_filename = f"translated_{unique_id}_{os.path.splitext(filename)[0]}.{target_ext}"
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
     
@@ -345,11 +343,15 @@ def get_preview(filename):
             return jsonify({'success': True, 'content': content, 'type': 'text'})
             
         elif ext == 'pdf':
-            # Note: Translated PDFs in this app are currently saved as .txt
-            # If it's a real PDF, we'd need extraction, but existing engine saves it as txt
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read(10000)
-            return jsonify({'success': True, 'content': content, 'type': 'text'})
+            # Use PyPDF2 to extract text from the translated PDF for preview
+            import PyPDF2
+            with open(file_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                content = ""
+                # Get text from first few pages to show in preview
+                for page_idx in range(min(len(reader.pages), 5)):
+                    content += reader.pages[page_idx].extract_text() + "\n"
+            return jsonify({'success': True, 'content': content[:10000], 'type': 'text'})
             
         return jsonify({'success': False, 'error': f'Preview not available for {ext} format'})
     except Exception as e:

@@ -109,41 +109,81 @@ def translate_text(text, target_lang, source_lang='auto'):
     return translated_text
 
 def translate_pdf(input_path, output_path, target_lang):
-    """PDF to Translated TXT (Layout preservation is complex, focus on text for now)"""
+    """
+    Enhanced PDF Translation via Bridge Workflow:
+    PDF -> DOCX (Layout Restoration) -> Translate -> PDF (Render)
+    """
     try:
-        with open(input_path, 'rb') as f:
-            pdf_reader = PyPDF2.PdfReader(f)
-            text = ""
-            for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
+        from converter_universal import convert_pdf_to_docx, convert_docx_to_pdf
+        import uuid
         
-        translated_text = translate_text(text, target_lang)
+        unique_id = str(uuid.uuid4())
+        folder = os.path.dirname(input_path)
         
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(translated_text)
+        # Step 1: PDF to DOCX
+        temp_docx_in = os.path.join(folder, f"bridge_in_{unique_id}.docx")
+        success, msg = convert_pdf_to_docx(input_path, temp_docx_in)
+        if not success:
+            return False, f"Structural analysis failed: {msg}"
             
-        return True, "PDF translated successfully to text"
+        # Step 2: Translate DOCX
+        temp_docx_out = os.path.join(folder, f"bridge_out_{unique_id}.docx")
+        success, msg = translate_docx(temp_docx_in, temp_docx_out, target_lang)
+        if not success:
+            return False, f"Content translation failed: {msg}"
+            
+        # Step 3: DOCX to PDF
+        success, msg = convert_docx_to_pdf(temp_docx_out, output_path)
+        
+        # Cleanup
+        for tmp in [temp_docx_in, temp_docx_out]:
+            if os.path.exists(tmp):
+                try: os.remove(tmp)
+                except: pass
+                
+        if success:
+            return True, "PDF translated with structure preserved"
+        return False, f"Final rendering failed: {msg}"
+        
     except Exception as e:
-        return False, str(e)
+        return False, f"Bridge error: {str(e)}"
 
 def translate_docx(input_path, output_path, target_lang):
-    """DOCX to Translated DOCX (Attempt to preserve structure)"""
+    """DOCX Translation with deep table and formatting preservation"""
     try:
         doc = Document(input_path)
         
+        # 1. Process Main Paragraphs
         for para in doc.paragraphs:
             if para.text.strip():
-                para.text = translate_text(para.text, target_lang)
+                # We translate at the paragraph level but try to keep runs 
+                # (Simple approach: replace whole paragraph text)
+                # For better results while keeping format, one could translate runs 
+                # but Google Translate needs context, so paragraph level is safer.
+                original_text = para.text
+                translated_text = translate_text(original_text, target_lang)
+                para.text = translated_text
                 
-        # Handle tables
+        # 2. Process Tables (Detection feature requested)
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
-                    if cell.text.strip():
-                        cell.text = translate_text(cell.text, target_lang)
-                        
+                    # Recursive check for nested tables (though Document.tables only gets top-level)
+                    for para in cell.paragraphs:
+                        if para.text.strip():
+                            para.text = translate_text(para.text, target_lang)
+                    
+                    # Handle nested tables inside cells if any
+                    if cell.tables:
+                        for nested_table in cell.tables:
+                            for n_row in nested_table.rows:
+                                for n_cell in n_row.cells:
+                                    for n_para in n_cell.paragraphs:
+                                        if n_para.text.strip():
+                                            n_para.text = translate_text(n_para.text, target_lang)
+                            
         doc.save(output_path)
-        return True, "DOCX translated successfully"
+        return True, "DOCX translated with tables preserved"
     except Exception as e:
         return False, str(e)
 
