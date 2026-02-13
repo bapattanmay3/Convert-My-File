@@ -34,8 +34,8 @@ def compressor():
     return render_template('compressor.html', site_name=app.config['SITE_NAME'])
 
 @app.route('/convert', methods=['POST'])
-def convert_file():
-    """Handle file conversions (PDF, DOCX, TXT)"""
+def convert_file_universal():
+    """Universal file converter - handles all formats"""
     if 'file' not in request.files:
         return jsonify({'success': False, 'error': 'No file uploaded'}), 400
     
@@ -43,7 +43,7 @@ def convert_file():
     if file.filename == '':
         return jsonify({'success': False, 'error': 'No file selected'}), 400
     
-    target_format = request.form.get('format', 'docx')
+    target_format = request.form.get('format', '').lower()
     
     # Save uploaded file
     filename = secure_filename(file.filename)
@@ -51,19 +51,19 @@ def convert_file():
     input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
     file.save(input_path)
     
+    # Get file extension
+    source_format = os.path.splitext(filename)[1].lower().replace('.', '')
+    
     # Generate output filename
     base_name = os.path.splitext(filename)[0]
     output_filename = f"converted_{unique_id}_{base_name}.{target_format}"
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
     
-    # Get file extension
-    ext = os.path.splitext(filename)[1].lower().replace('.', '')
+    # Import converter
+    from converter_universal import convert_file
     
-    # Import universal converter
-    from converter_universal import convert_file as universal_convert
-    
-    # Run conversion
-    success, message = universal_convert(input_path, output_path, ext, target_format)
+    # Perform conversion
+    success, message = convert_file(input_path, output_path, source_format, target_format)
     
     if success and os.path.exists(output_path):
         return jsonify({

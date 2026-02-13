@@ -309,43 +309,44 @@
 
         fileBrowseBtn.onclick = () => fileInput.click();
 
+        // Dynamic format options based on file type
+        const formatOptions = {
+            'pdf': ['docx', 'txt', 'xlsx'],
+            'docx': ['pdf', 'txt', 'html'],
+            'xlsx': ['csv', 'json', 'xml', 'pdf', 'html'],
+            'xls': ['csv', 'json', 'xml', 'xlsx'],
+            'csv': ['xlsx', 'json', 'xml'],
+            'json': ['csv', 'xlsx', 'xml'],
+            'pptx': ['pdf', 'txt'],
+            'ppt': ['pdf', 'txt', 'pptx'],
+            'txt': ['pdf', 'docx']
+        };
+
+        // Update when file is selected
         fileInput.onchange = (e) => {
             if (e.target.files[0]) {
                 fileSelectedFile = e.target.files[0];
+                const ext = fileSelectedFile.name.split('.').pop().toLowerCase();
+                const options = formatOptions[ext] || [];
+
+                // Clear and rebuild select options
+                fileFormatSelect.innerHTML = '';
+                options.forEach(format => {
+                    const option = document.createElement('option');
+                    option.value = format;
+                    option.textContent = format.toUpperCase();
+                    fileFormatSelect.appendChild(option);
+                });
+
+                // Update file info text
                 fileFileName.textContent = fileSelectedFile.name;
                 fileFileSize.textContent = (fileSelectedFile.size / 1024).toFixed(2) + ' KB';
+
+                // Show UI elements
                 fileInfo.style.display = 'block';
                 fileOptions.style.display = 'block';
                 fileDropArea.style.display = 'none';
-
-                // Filter format options based on input file
-                const ext = fileSelectedFile.name.split('.').pop().toLowerCase();
-                Array.from(fileFormatSelect.options).forEach(opt => {
-                    // Default: Hide all, then show valid ones
-                    opt.style.display = 'none';
-
-                    if (ext === 'pdf') {
-                        if (['docx', 'txt', 'xlsx'].includes(opt.value)) opt.style.display = 'block';
-                    } else if (ext === 'docx') {
-                        if (['pdf', 'txt', 'html'].includes(opt.value)) opt.style.display = 'block';
-                    } else if (ext === 'txt') {
-                        if (['pdf', 'docx'].includes(opt.value)) opt.style.display = 'block';
-                    } else if (ext === 'xlsx' || ext === 'xls') {
-                        if (['pdf', 'csv', 'json', 'xml', 'html'].includes(opt.value)) opt.style.display = 'block';
-                    } else if (ext === 'pptx' || ext === 'ppt') {
-                        if (['pdf', 'txt'].includes(opt.value)) opt.style.display = 'block';
-                    } else if (ext === 'html') {
-                        if (['pdf'].includes(opt.value)) opt.style.display = 'block';
-                    } else if (ext === 'csv') {
-                        if (['xlsx', 'json', 'xml'].includes(opt.value)) opt.style.display = 'block';
-                    } else if (ext === 'json') {
-                        if (['csv', 'xlsx', 'xml'].includes(opt.value)) opt.style.display = 'block';
-                    }
-                });
-
-                // Auto-select first visible option
-                const firstVisible = Array.from(fileFormatSelect.options).find(opt => opt.style.display === 'block');
-                if (firstVisible) fileFormatSelect.value = firstVisible.value;
+                fileConvertBtn.disabled = false;
             }
         };
 
