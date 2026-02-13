@@ -2,26 +2,10 @@ import os
 import re
 import time
 import PyPDF2
-import translators as ts
+from deep_translator import GoogleTranslator
 from docx import Document
 import openpyxl
 import csv
-import logging
-
-# Configure safe logging
-logging.basicConfig(
-    filename='translator.log',
-    level=logging.ERROR,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-
-def safe_log(msg):
-    """Safely log messages without crashing the console on Windows"""
-    try:
-        logging.error(msg)
-        print(msg)
-    except:
-        pass
 
 # ===== ENTITY PRESERVATION PATTERNS =====
 PRESERVE_PATTERNS = [
@@ -38,7 +22,7 @@ PRESERVE_PATTERNS = [
 ]
 
 def should_preserve(text):
-    """Check if text should be excluded from translation"""
+    """Check if text should be kept as-is (not translated)"""
     if not isinstance(text, str):
         return True
     text = text.strip()
@@ -47,30 +31,20 @@ def should_preserve(text):
     for pattern in PRESERVE_PATTERNS:
         if re.match(pattern, text):
             return True
+    # Check if mostly numbers
     letters = sum(c.isalpha() for c in text)
     numbers = sum(c.isdigit() for c in text)
     if numbers > letters and numbers > 3:
         return True
     return False
 
-def translate_text_safe(text, target_lang, source_lang='auto', max_retries=3):
-    """Safe translation using translators library (more stable)"""
-    if not text or not text.strip():
-        return text
+# ===== FIXED TRANSLATE FUNCTION WITH CHUNKING AND RETRY =====
+def translate_text(text, target_lang, source_lang='auto', max_retries=3):
+    """Safe translation with chunking and retry logic"""
     if should_preserve(text):
         return text
     
-    # Map language codes
-    lang_map = {
-        'es': 'es', 'fr': 'fr', 'de': 'de', 'it': 'it', 'pt': 'pt',
-        'ru': 'ru', 'zh': 'zh', 'ja': 'ja', 'ko': 'ko', 'ar': 'ar',
-        'hi': 'hi', 'bn': 'bn', 'te': 'te', 'mr': 'mr', 'ta': 'ta',
-        'gu': 'gu', 'kn': 'kn', 'ml': 'ml', 'pa': 'pa', 'ur': 'ur'
-    }
-    
-    target = lang_map.get(target_lang[:2], target_lang[:2])
-    
-    # Chunk long text
+    # Split long text into smaller chunks (Google limit ~5000 chars)
     chunk_size = 4000
     chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
     translated_chunks = []
@@ -78,22 +52,23 @@ def translate_text_safe(text, target_lang, source_lang='auto', max_retries=3):
     for chunk in chunks:
         for attempt in range(max_retries):
             try:
-                # Use google translate via translators library
-                result = ts.google(chunk, from_language=source_lang, to_language=target)
+                translator = GoogleTranslator(source=source_lang, target=target_lang[:2])
+                result = translator.translate(chunk)
                 if result:
                     translated_chunks.append(result)
                     break
                 time.sleep(1)
             except Exception as e:
-                safe_log(f"Translation attempt {attempt+1} failed: {e}")
+                print(f"Translation attempt {attempt+1} failed: {e}")
                 if attempt == max_retries - 1:
                     translated_chunks.append(chunk)  # Fallback to original
                 time.sleep(2)
     
     return ' '.join(translated_chunks)
 
+# ===== PDF TRANSLATOR =====
 def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
-    """PDF translation with chunking"""
+    """Translate PDF while preserving structure"""
     try:
         text_content = []
         with open(input_path, 'rb') as file:
@@ -101,10 +76,10 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
             total_pages = len(pdf_reader.pages)
             
             for i, page in enumerate(pdf_reader.pages):
-                safe_log(f"Translating page {i+1}/{total_pages}")
+                print(f"Translating page {i+1}/{total_pages}")
                 text = page.extract_text()
                 if text and text.strip():
-                    translated = translate_text_safe(text, target_lang, source_lang)
+                    translated = translate_text(text, target_lang, source_lang)
                     text_content.append(translated)
                 else:
                     text_content.append("")
@@ -115,91 +90,104 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
         
         return True, f"PDF translation completed: {total_pages} pages"
     except Exception as e:
-        safe_log(f"PDF translation error: {e}")
+        print(f"PDF translation error: {e}")
         return False, str(e)
 
-def translate_docx(input_path, output_path, target_lang):
-    """DOCX Translation with deep table and formatting preservation"""
+# ===== WORD DOCUMENT TRANSLATOR =====
+def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
+    """Translate Word document preserving tables and formatting"""
     try:
         doc = Document(input_path)
         for para in doc.paragraphs:
-            if para.text.strip():
-                para.text = translate_text_safe(para.text, target_lang)
-                
+            if para.text and not should_preserve(para.text):
+                para.text = translate_text(para.text, target_lang, source_lang)
+        
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for para in cell.paragraphs:
-                        if para.text.strip():
-                            para.text = translate_text_safe(para.text, target_lang)
-                            
-        doc.save(output_path)
-        return True, "DOCX translated successfully"
-    except Exception as e:
-        return False, str(e)
-
-def translate_xlsx(input_path, output_path, target_lang):
-    """Excel to Translated Excel (Multi-sheet)"""
-    try:
-        import pandas as pd
-        all_sheets = pd.read_excel(input_path, sheet_name=None)
+                        if para.text and not should_preserve(para.text):
+                            para.text = translate_text(para.text, target_lang, source_lang)
         
-        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-            for sheet_name, df in all_sheets.items():
-                for col in df.columns:
-                    df[col] = df[col].apply(lambda x: translate_text_safe(str(x), target_lang) if pd.notnull(x) and str(x).strip() else x)
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-                
-        return True, "Excel file translated successfully"
+        doc.save(output_path)
+        return True, "Word translation completed"
     except Exception as e:
         return False, str(e)
 
-def translate_txt(input_path, output_path, target_lang):
-    """TXT Translation"""
+# ===== EXCEL TRANSLATOR =====
+def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
+    """Translate Excel files preserving all sheets and structure"""
+    try:
+        wb = openpyxl.load_workbook(input_path)
+        for sheet_name in wb.sheetnames:
+            sheet = wb[sheet_name]
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str):
+                        if not should_preserve(cell.value):
+                            cell.value = translate_text(cell.value, target_lang, source_lang)
+        
+        wb.save(output_path)
+        return True, "Excel translation completed"
+    except Exception as e:
+        return False, str(e)
+
+# ===== CSV TRANSLATOR =====
+def translate_csv(input_path, output_path, target_lang, source_lang='auto'):
+    """Translate CSV files"""
+    try:
+        with open(input_path, 'r', encoding='utf-8') as infile:
+            reader = csv.reader(infile)
+            rows = []
+            for row in reader:
+                new_row = []
+                for cell in row:
+                    if should_preserve(cell):
+                        new_row.append(cell)
+                    else:
+                        new_row.append(translate_text(cell, target_lang, source_lang))
+                rows.append(new_row)
+        
+        with open(output_path, 'w', newline='', encoding='utf-8') as outfile:
+            writer = csv.writer(outfile)
+            writer.writerows(rows)
+        return True, "CSV translation completed"
+    except Exception as e:
+        return False, str(e)
+
+# ===== TEXT FILE TRANSLATOR =====
+def translate_text_file(input_path, output_path, target_lang, source_lang='auto'):
+    """Translate plain text files"""
     try:
         with open(input_path, 'r', encoding='utf-8') as f:
-            text = f.read()
-        translated_text = translate_text_safe(text, target_lang)
+            content = f.read()
+        
+        translated = translate_text(content, target_lang, source_lang)
+        
         with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(translated_text)
-        return True, "Text file translated successfully"
+            f.write(translated)
+        return True, "Text translation completed"
     except Exception as e:
         return False, str(e)
 
-def translate_csv(input_path, output_path, target_lang):
-    """CSV Translation"""
-    try:
-        import pandas as pd
-        df = pd.read_csv(input_path)
-        for col in df.columns:
-            df[col] = df[col].apply(lambda x: translate_text_safe(str(x), target_lang) if pd.notnull(x) and str(x).strip() else x)
-        df.to_csv(output_path, index=False)
-        return True, "CSV file translated successfully"
-    except Exception as e:
-        return False, str(e)
-
+# ===== MAIN DISPATCHER FUNCTION =====
 def translate_document(input_path, output_path, target_lang, source_lang='auto', file_ext=None):
-    """Main dispatcher function using stable translators library"""
-    try:
-        if file_ext is None:
-            file_ext = os.path.splitext(input_path)[1].lower()
-        
-        if not os.path.exists(input_path):
-            return False, "Input file not found"
-        
-        if file_ext == '.pdf':
-            return translate_pdf(input_path, output_path, target_lang, source_lang)
-        elif file_ext == '.docx':
-            return translate_docx(input_path, output_path, target_lang)
-        elif file_ext in ['.xlsx', '.xls']:
-            return translate_xlsx(input_path, output_path, target_lang)
-        elif file_ext == '.csv':
-            return translate_csv(input_path, output_path, target_lang)
-        elif file_ext == '.txt':
-            return translate_txt(input_path, output_path, target_lang)
-        else:
-            return False, f"Unsupported file type: {file_ext}"
-            
-    except Exception as e:
-        safe_log(f"Critical translation error: {e}")
-        return False, str(e)
+    """Main dispatcher function - THIS IS WHAT app.py CALLS"""
+    if file_ext is None:
+        file_ext = os.path.splitext(input_path)[1].lower()
+    
+    translators = {
+        '.pdf': translate_pdf,
+        '.docx': translate_docx,
+        '.doc': translate_docx,
+        '.xlsx': translate_excel,
+        '.xls': translate_excel,
+        '.csv': translate_csv,
+        '.txt': translate_text_file,
+    }
+    
+    translator = translators.get(file_ext)
+    if translator:
+        return translator(input_path, output_path, target_lang, source_lang)
+    else:
+        return False, f"Unsupported file type: {file_ext}"
