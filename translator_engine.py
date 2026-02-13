@@ -145,17 +145,31 @@ def translate_pdf(input_path, output_path, target_lang):
             return False, f"Content translation failed: {msg}"
             
         # Step 3: DOCX to PDF
-        success, msg = convert_docx_to_pdf(temp_docx_out, output_path)
+        success_render, msg_render = convert_docx_to_pdf(temp_docx_out, output_path)
         
-        # Cleanup
-        for tmp in [temp_docx_in, temp_docx_out]:
-            if os.path.exists(tmp):
-                try: os.remove(tmp)
-                except: pass
+        # Cleanup input bridge
+        if os.path.exists(temp_docx_in):
+            try: os.remove(temp_docx_in)
+            except: pass
                 
-        if success:
+        if success_render:
+            # Full success - cleanup bridge out and return PDF
+            if os.path.exists(temp_docx_out):
+                try: os.remove(temp_docx_out)
+                except: pass
             return True, "PDF translated with structure preserved"
-        return False, f"Final rendering failed: {msg}"
+        else:
+            # Partial success - handle DOCX fallback
+            # Move the translated DOCX to the output path but change extension
+            final_docx_path = output_path.replace('.pdf', '.docx')
+            import shutil
+            shutil.move(temp_docx_out, final_docx_path)
+            # We return success=True but with a message explaining the format change
+            # However, the app.py handles output_path, so we need to be careful.
+            # Best is to return False with a specific 'PARTIAL' signal or just 
+            # let translate_file handling it. Actually, app.py expects a file at output_path.
+            # Let's just return False but with a directive message.
+            return False, f"TRANS_DOCX_ONLY|{msg_render}"
         
     except Exception as e:
         return False, f"Bridge error: {str(e)}"

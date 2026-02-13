@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from io import StringIO, BytesIO
 
 # ============ RENDER ENVIRONMENT CHECK ============
-ON_RENDER = os.environ.get('RENDER', False)
+ON_RENDER = os.environ.get('RENDER', '').lower() == 'true'
 
 # ============ LAZY LOADING HELPERS ============
 
@@ -452,23 +452,41 @@ def convert_pptx_to_txt(input_path, output_path):
 # ============ WORD CONVERSIONS ============
 
 def convert_docx_to_pdf(input_path, output_path):
-    """Word to PDF"""
+    """Word to PDF with strong fallbacks"""
     try:
-        # Try docx2pdf first (Windows only)
-        try:
-            from docx2pdf import convert
-            convert(input_path, output_path)
-            return True, "DOCX to PDF conversion successful"
-        except:
-            # Fallback to polytext + LibreOffice
+        # Method 1: docx2pdf (Windows only, requires Word)
+        if not ON_RENDER:
             try:
-                from polytext import convert_to_pdf
-                convert_to_pdf(input_path, output_path)
-                return True, "DOCX to PDF conversion successful (LibreOffice)"
+                from docx2pdf import convert
+                convert(input_path, output_path)
+                if os.path.exists(output_path):
+                    return True, "DOCX to PDF conversion successful (Word)"
             except:
-                if ON_RENDER:
-                    return False, "DOCX to PDF requires LibreOffice on Render (not found)"
-                return False, "DOCX to PDF conversion failed: No compatible converter found"
+                pass
+
+        # Method 2: WeasyPrint (Pure Python, primary fallback)
+        try:
+            # We convert to HTML first, then to PDF via WeasyPrint
+            temp_html = input_path.replace('.docx', '.temp_bridge.html')
+            success, msg = convert_docx_to_html(input_path, temp_html)
+            if success:
+                HTML = get_weasyprint()
+                HTML(temp_html).write_pdf(output_path)
+                if os.path.exists(temp_html):
+                    os.remove(temp_html)
+                return True, "DOCX to PDF conversion successful (WeasyPrint Fallback)"
+        except Exception as wp_err:
+            print(f"WeasyPrint fallback failed: {wp_err}")
+
+        # Method 3: polytext + LibreOffice
+        try:
+            from polytext import convert_to_pdf
+            convert_to_pdf(input_path, output_path)
+            return True, "DOCX to PDF conversion successful (LibreOffice)"
+        except:
+            if ON_RENDER:
+                return False, "DOCX to PDF requires LibreOffice on Render (not found)"
+            return False, "DOCX to PDF conversion failed: No compatible converter found"
     except Exception as e:
         return False, str(e)
 
@@ -489,14 +507,23 @@ def convert_docx_to_html(input_path, output_path):
     try:
         Document = get_docx()
         doc = Document(input_path)
-        html_content = ["<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Document</title></head><body>"]
+        html_content = [
+            "<!DOCTYPE html><html><head><meta charset='UTF-8'>",
+            "<style>",
+            "body { font-family: 'DejaVu Sans', Arial, sans-serif; line-height: 1.5; padding: 40px; }",
+            "p { margin-bottom: 12px; }",
+            "table { border-collapse: collapse; width: 100%; margin: 20px 0; }",
+            "td, th { border: 1px solid #ddd; padding: 8px; text-align: left; }",
+            "tr:nth-child(even) { background-color: #f9f9f9; }",
+            "</style></head><body>"
+        ]
         
         for para in doc.paragraphs:
             if para.text.strip():
                 html_content.append(f"<p>{para.text}</p>")
         
         for table in doc.tables:
-            html_content.append("<table border='1'>")
+            html_content.append("<table>")
             for row in table.rows:
                 html_content.append("<tr>")
                 for cell in row.cells:

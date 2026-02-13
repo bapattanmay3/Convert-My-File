@@ -337,6 +337,17 @@ def translate():
         # Translate
         success, message = translate_file(input_path, output_path, ext, target_lang)
         
+        # --- Handle Partial Success Fallback (PDF -> DOCX) ---
+        is_partial = False
+        if not success and message.startswith("TRANS_DOCX_ONLY|"):
+            is_partial = True
+            render_msg = message.split("|")[1]
+            # Update paths to the fallback DOCX file
+            output_filename = output_filename.replace('.pdf', '.docx')
+            output_path = output_path.replace('.pdf', '.docx')
+            success = True # Treat as success for the UI
+            message = f"Translation ready in Word format (Note: PDF rendering skipped - {render_msg})"
+
         if success and os.path.exists(output_path):
             return jsonify({
                 'success': True,
