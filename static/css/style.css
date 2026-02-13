@@ -2,16 +2,21 @@
     --primary: #ff6b4a;
     --primary-hover: #ff8a5c;
     --accent: #ff4d4d;
-    --dark: #0f172a;
-    --card-bg: rgba(30, 41, 59, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
+    --dark: #000000;
+    /* Pure Black Background */
+    --card-bg: #111111;
+    /* Deep Black for cards */
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --text-main: #ffffff;
+    /* Brighter white for text */
+    --text-muted: #cccccc;
+    /* Clearer gray for muted text */
+    --input-bg: #1a1a1a;
 }
 
 body {
     font-family: 'Outfit', 'Inter', sans-serif;
-    background: radial-gradient(circle at top right, #1e293b, #0f172a);
+    background: #000000;
     color: var(--text-main);
     margin: 0;
     padding: 0;
@@ -28,7 +33,7 @@ body {
 h1 {
     font-size: 3.5rem;
     font-weight: 800;
-    background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+    background: linear-gradient(135deg, #ffffff 0%, var(--primary) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -44,14 +49,14 @@ h1 {
 /* Premium Warm Buttons */
 .btn-premium {
     background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-    color: white;
+    color: white !important;
     padding: 14px 35px;
     border-radius: 30px;
     font-weight: 700;
     border: none;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 10px 15px -3px rgba(255, 107, 74, 0.3);
+    box-shadow: 0 10px 15px -3px rgba(255, 107, 74, 0.4);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -61,7 +66,7 @@ h1 {
 
 .btn-premium:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 20px 25px -5px rgba(255, 107, 74, 0.4);
+    box-shadow: 0 20px 25px -5px rgba(255, 107, 74, 0.5);
     background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%);
 }
 
@@ -72,7 +77,7 @@ h1 {
 .btn-premium:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    background: #475569;
+    background: #333333;
 }
 
 /* Tools Grid */
@@ -85,7 +90,6 @@ h1 {
 
 .tool-card {
     background: var(--card-bg);
-    backdrop-filter: blur(12px);
     border: 1px solid var(--glass-border);
     border-radius: 24px;
     padding: 35px 25px;
@@ -101,14 +105,14 @@ h1 {
 .tool-card:hover {
     transform: translateY(-8px);
     border-color: var(--primary);
-    background: rgba(30, 41, 59, 0.9);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+    background: #1a1a1a;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
 }
 
 .tool-card h3 {
     margin: 0;
     font-size: 1.5rem;
-    background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+    background: linear-gradient(135deg, #ffffff 0%, var(--primary) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -117,7 +121,7 @@ h1 {
 .tool-card p {
     margin: 0;
     color: var(--text-muted);
-    font-size: 0.95rem;
+    font-size: 1rem;
     line-height: 1.5;
 }
 
@@ -144,6 +148,25 @@ h1 {
 .back-link:hover {
     color: var(--primary);
     transform: translateX(-5px);
+}
+
+/* Dropdown / Select Fixes */
+select.form-select {
+    background-color: #1a1a1a !important;
+    color: #ffffff !important;
+    border: 1px solid var(--glass-border) !important;
+    padding: 12px 15px !important;
+    border-radius: 12px !important;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' class='bi bi-chevron-down' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+}
+
+select.form-select option {
+    background-color: #1a1a1a !important;
+    color: #ffffff !important;
 }
 
 @media (max-width: 640px) {
