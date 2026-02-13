@@ -4,52 +4,87 @@
 <p class="tagline">High-Fidelity Document Translation across 100+ Languages</p>
 
 <div class="converter-card">
-    <form id="translate-form" action="/translate" method="POST" enctype="multipart/form-data">
-        <div class="upload-area" onclick="document.getElementById('file-upload').click()">
+    <div id="upload-section">
+        <div class="upload-area" id="file-drop-area">
             <span class="upload-icon">📄</span>
-            <div class="btn-premium" style="padding: 10px 25px; margin-bottom: 10px;">Select Document</div>
+            <div class="btn-premium" style="padding: 10px 25px; margin-bottom: 10px;" id="browse-btn">Select Document
+            </div>
             <p style="color: var(--text-muted);">PDF, DOCX, or TXT</p>
-            <input id="file-upload" name="file" type="file" accept=".pdf,.docx,.txt" onchange="handleFileSelect(this)"
-                hidden />
+            <input id="file-upload" name="file" type="file" accept=".pdf,.docx,.txt" hidden />
         </div>
 
         <div id="file-info" class="file-info" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span id="display-name" style="font-weight: 600;"></span>
-                <span id="display-size" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.5rem;">📄</span>
+                    <div style="display: flex; flex-direction: column;">
+                        <span id="display-name" style="font-weight: 600;"></span>
+                        <span id="display-size" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+                    </div>
+                </div>
+                <button type="button" id="remove-file" class="btn-icon"
+                    style="color: var(--text-muted); background: none; border: none; cursor: pointer; font-size: 1.2rem;">✖</button>
             </div>
         </div>
 
-        <div style="margin-top: 30px; text-align: left;">
+        <div id="translate-options" style="display: none; margin-top: 30px; text-align: left;">
             <div class="option-group">
                 <label style="color: var(--text-muted); font-size: 0.9rem; font-weight: 500;">Target Language</label>
-                <select name="target_lang" class="form-select" required>
+                <select id="target-lang" class="form-select">
                     {% for code, name in languages.items() %}
                     <option value="{{ code }}" {% if code=='en' %}selected{% endif %}>{{ name }}</option>
                     {% endfor %}
                 </select>
             </div>
+
+            <button type="button" id="translate-btn" class="btn-premium" style="width: 100%; margin-top: 30px;">
+                <span>🚀 Translate Now</span>
+            </button>
         </div>
-
-        <button type="submit" id="submit-btn" class="btn-premium" style="width: 100%; margin-top: 30px;">
-            <span>Translate & Download</span>
-        </button>
-    </form>
-
-    <div id="status-msg" style="margin-top: 20px; display: none; color: var(--primary); text-align: center;">
-        <span class="loading-dots">Processing translation</span>
     </div>
 
-    {% with messages = get_flashed_messages() %}
-    {% if messages %}
-    <div
-        style="margin-top: 20px; padding: 15px; border-radius: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; text-align: center;">
-        {% for message in messages %}
-        <p>{{ message }}</p>
-        {% endfor %}
+    <!-- Processing State -->
+    <div id="status-msg" style="margin-top: 20px; display: none; text-align: center;">
+        <div style="color: var(--primary); font-size: 1.2rem; margin-bottom: 10px;">
+            <span class="loading-dots">Translating your document</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">This may take a moment for larger files...</p>
     </div>
-    {% endif %}
-    {% endwith %}
+
+    <!-- Result Area -->
+    <div id="result-area"
+        style="display: none; margin-top: 30px; padding: 25px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 20px; text-align: center;">
+        <h3 style="color: #10b981; margin-bottom: 20px;">✅ Translation Complete!</h3>
+        <div style="display: flex; gap: 15px; justify-content: center;">
+            <button id="preview-btn" class="btn-premium"
+                style="background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border); box-shadow: none;">
+                👁️ Preview
+            </button>
+            <a id="download-link" href="#" class="btn-premium">
+                ⬇️ Download
+            </a>
+        </div>
+    </div>
+
+    <div id="error-msg"
+        style="display: none; margin-top: 20px; padding: 15px; border-radius: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; text-align: center;">
+    </div>
+</div>
+
+<!-- PREVIEW MODAL -->
+<div id="preview-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Document Preview</h3>
+            <button id="close-modal" class="btn-icon">✖</button>
+        </div>
+        <div class="modal-body">
+            <pre id="preview-text"></pre>
+        </div>
+        <div class="modal-footer">
+            <p style="font-size: 0.8rem; color: var(--text-muted);">Preview shows first 10,000 characters only.</p>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -78,33 +113,203 @@
             content: '';
         }
     }
+
+    /* Modal Styling */
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+    }
+
+    .modal.show {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .modal-content {
+        background: #1e293b;
+        width: 90%;
+        max-width: 700px;
+        max-height: 80vh;
+        border-radius: 24px;
+        border: 1px solid var(--glass-border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+        padding: 20px 30px;
+        border-bottom: 1px solid var(--glass-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        color: var(--primary);
+    }
+
+    .modal-body {
+        padding: 30px;
+        overflow-y: auto;
+        color: #e2e8f0;
+        font-family: 'Inter', sans-serif;
+        line-height: 1.6;
+        text-align: left;
+    }
+
+    #preview-text {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-size: 0.95rem;
+        margin: 0;
+    }
+
+    .modal-footer {
+        padding: 15px 30px;
+        border-top: 1px solid var(--glass-border);
+        background: rgba(15, 23, 42, 0.3);
+    }
+
+    .btn-icon:hover {
+        color: var(--primary);
+    }
 </style>
 
 <script>
-    const form = document.getElementById('translate-form');
-    const submitBtn = document.getElementById('submit-btn');
-    const statusMsg = document.getElementById('status-msg');
-
-    function handleFileSelect(input) {
+    document.addEventListener('DOMContentLoaded', function () {
+        const fileUpload = document.getElementById('file-upload');
+        const dropArea = document.getElementById('file-drop-area');
+        const browseBtn = document.getElementById('browse-btn');
         const fileInfo = document.getElementById('file-info');
         const displayName = document.getElementById('display-name');
         const displaySize = document.getElementById('display-size');
+        const removeFile = document.getElementById('remove-file');
+        const translateOptions = document.getElementById('translate-options');
+        const translateBtn = document.getElementById('translate-btn');
+        const statusMsg = document.getElementById('status-msg');
+        const resultArea = document.getElementById('result-area');
+        const downloadLink = document.getElementById('download-link');
+        const previewBtn = document.getElementById('preview-btn');
+        const errorMsg = document.getElementById('error-msg');
+        const targetLang = document.getElementById('target-lang');
 
-        if (input.files && input.files[0]) {
-            const file = input.files[0];
-            displayName.textContent = file.name;
-            displaySize.textContent = (file.size / 1024).toFixed(1) + ' KB';
-            fileInfo.style.display = 'block';
-        } else {
+        // Modal elements
+        const modal = document.getElementById('preview-modal');
+        const closeModal = document.getElementById('close-modal');
+        const previewText = document.getElementById('preview-text');
+
+        let selectedFile = null;
+        let lastResultFilename = null;
+
+        browseBtn.onclick = () => fileUpload.click();
+        dropArea.onclick = (e) => { if (e.target !== browseBtn) fileUpload.click(); };
+
+        fileUpload.onchange = (e) => {
+            if (e.target.files && e.target.files[0]) {
+                selectedFile = e.target.files[0];
+                displayName.textContent = selectedFile.name;
+                displaySize.textContent = (selectedFile.size / 1024).toFixed(1) + ' KB';
+
+                dropArea.style.display = 'none';
+                fileInfo.style.display = 'block';
+                translateOptions.style.display = 'block';
+                errorMsg.style.display = 'none';
+                resultArea.style.display = 'none';
+            }
+        };
+
+        removeFile.onclick = () => {
+            selectedFile = null;
+            fileUpload.value = '';
             fileInfo.style.display = 'none';
-        }
-    }
+            translateOptions.style.display = 'none';
+            dropArea.style.display = 'block';
+            resultArea.style.display = 'none';
+        };
 
-    form.onsubmit = () => {
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.7';
-        submitBtn.querySelector('span').textContent = 'Translating...';
-        statusMsg.style.display = 'block';
-    };
+        translateBtn.onclick = async () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('target_lang', targetLang.value);
+
+            // UI Transitions
+            translateOptions.style.display = 'none';
+            fileInfo.style.display = 'none';
+            statusMsg.style.display = 'block';
+            errorMsg.style.display = 'none';
+
+            try {
+                const response = await fetch('/translate', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                statusMsg.style.display = 'none';
+
+                if (data.success) {
+                    lastResultFilename = data.preview_filename;
+                    downloadLink.href = data.download_url;
+                    resultArea.style.display = 'block';
+                } else {
+                    errorMsg.textContent = '❌ ' + (data.error || 'Translation failed');
+                    errorMsg.style.display = 'block';
+                    fileInfo.style.display = 'block';
+                    translateOptions.style.display = 'block';
+                }
+            } catch (error) {
+                statusMsg.style.display = 'none';
+                errorMsg.textContent = '❌ Network error. Please try again.';
+                errorMsg.style.display = 'block';
+                fileInfo.style.display = 'block';
+                translateOptions.style.display = 'block';
+            }
+        };
+
+        // Preview Logic
+        previewBtn.onclick = async () => {
+            if (!lastResultFilename) return;
+
+            previewBtn.textContent = '⌛ Loading...';
+            previewBtn.disabled = true;
+
+            try {
+                const response = await fetch(`/get-preview/${lastResultFilename}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    previewText.textContent = data.content;
+                    modal.classList.add('show');
+                } else {
+                    alert('Preview error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Connection error for preview');
+            } finally {
+                previewBtn.innerHTML = '👁️ Preview';
+                previewBtn.disabled = false;
+            }
+        };
+
+        closeModal.onclick = () => modal.classList.remove('show');
+        window.onclick = (e) => { if (e.target === modal) modal.classList.remove('show'); };
+    });
 </script>
 {% endblock %}

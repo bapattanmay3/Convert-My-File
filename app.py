@@ -254,10 +254,52 @@ def translate():
     success, message = translate_file(input_path, output_path, ext, target_lang)
     
     if success and os.path.exists(output_path):
-        return send_from_directory(app.config['UPLOAD_FOLDER'], output_filename, as_attachment=True)
+        return jsonify({
+            'success': True,
+            'message': message,
+            'download_url': f'/download/{output_filename}',
+            'preview_filename': output_filename,
+            'filename': output_filename
+        })
     else:
-        flash(f'Translation failed: {message}')
-        return redirect(url_for('translator'))
+        return jsonify({'success': False, 'error': message}), 500
+
+@app.route('/get-preview/<filename>')
+def get_preview(filename):
+    """Retrieve text content for previewing"""
+    filename = secure_filename(filename)
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    
+    if not os.path.exists(file_path):
+        return jsonify({'success': False, 'error': 'File not found'}), 404
+        
+    ext = os.path.splitext(filename)[1].lower().replace('.', '')
+    
+    try:
+        if ext == 'txt':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read(10000) # Preview first 10k chars
+            return jsonify({'success': True, 'content': content, 'type': 'text'})
+            
+        elif ext == 'docx':
+            from docx import Document
+            doc = Document(file_path)
+            full_text = []
+            for para in doc.paragraphs:
+                full_text.append(para.text)
+            content = "\n".join(full_text)[:10000]
+            return jsonify({'success': True, 'content': content, 'type': 'text'})
+            
+        elif ext == 'pdf':
+            # Note: Translated PDFs in this app are currently saved as .txt
+            # If it's a real PDF, we'd need extraction, but existing engine saves it as txt
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read(10000)
+            return jsonify({'success': True, 'content': content, 'type': 'text'})
+            
+        return jsonify({'success': False, 'error': f'Preview not available for {ext} format'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/download/<filename>')
 def download_file(filename):
