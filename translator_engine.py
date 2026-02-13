@@ -1,18 +1,14 @@
-"""
-Modular Translation Engine
-Supports: PDF, DOCX, TXT
-Uses: deep-translator
-"""
-
 import os
-from deep_translator import GoogleTranslator
-import PyPDF2
-from docx import Document
-from io import BytesIO
-import logging
+import re
 import time
+import PyPDF2
+import translators as ts
+from docx import Document
+import openpyxl
+import csv
+import logging
 
-# Configure safe logging to avoid console encoding issues
+# Configure safe logging
 logging.basicConfig(
     filename='translator.log',
     level=logging.ERROR,
@@ -23,9 +19,10 @@ def safe_log(msg):
     """Safely log messages without crashing the console on Windows"""
     try:
         logging.error(msg)
-        print(msg) # For user visibility, but wrapped nicely if needed
+        print(msg)
     except:
         pass
+
 # ===== ENTITY PRESERVATION PATTERNS =====
 PRESERVE_PATTERNS = [
     r'^[\d\s\+\-\(\)]+$',                    # Pure numbers
@@ -57,11 +54,23 @@ def should_preserve(text):
     return False
 
 def translate_text_safe(text, target_lang, source_lang='auto', max_retries=3):
-    """Safe translation with timeout, retries and chunking"""
+    """Safe translation using translators library (more stable)"""
+    if not text or not text.strip():
+        return text
     if should_preserve(text):
         return text
     
-    # Chunk long text (4000 chars max per request)
+    # Map language codes
+    lang_map = {
+        'es': 'es', 'fr': 'fr', 'de': 'de', 'it': 'it', 'pt': 'pt',
+        'ru': 'ru', 'zh': 'zh', 'ja': 'ja', 'ko': 'ko', 'ar': 'ar',
+        'hi': 'hi', 'bn': 'bn', 'te': 'te', 'mr': 'mr', 'ta': 'ta',
+        'gu': 'gu', 'kn': 'kn', 'ml': 'ml', 'pa': 'pa', 'ur': 'ur'
+    }
+    
+    target = lang_map.get(target_lang[:2], target_lang[:2])
+    
+    # Chunk long text
     chunk_size = 4000
     chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
     translated_chunks = []
@@ -69,9 +78,8 @@ def translate_text_safe(text, target_lang, source_lang='auto', max_retries=3):
     for chunk in chunks:
         for attempt in range(max_retries):
             try:
-                # Use deep-translator
-                translator = GoogleTranslator(source=source_lang, target=target_lang[:2])
-                result = translator.translate(chunk)
+                # Use google translate via translators library
+                result = ts.google(chunk, from_language=source_lang, to_language=target)
                 if result:
                     translated_chunks.append(result)
                     break
@@ -84,110 +92,8 @@ def translate_text_safe(text, target_lang, source_lang='auto', max_retries=3):
     
     return ' '.join(translated_chunks)
 
-# Supported languages
-LANGUAGES = {
-    'af': 'Afrikaans', 'sq': 'Albanian', 'am': 'Amharic', 'ar': 'Arabic', 'hy': 'Armenian', 'az': 'Azerbaijani',
-    'eu': 'Basque', 'be': 'Belarusian', 'bn': 'Bengali', 'bs': 'Bosnian', 'bg': 'Bulgarian', 'ca': 'Catalan',
-    'ceb': 'Cebuano', 'ny': 'Chichewa', 'zh-CN': 'Chinese (Simplified)', 'zh-TW': 'Chinese (Traditional)',
-    'co': 'Corsican', 'hr': 'Croatian', 'cs': 'Czech', 'da': 'Danish', 'nl': 'Dutch', 'en': 'English',
-    'eo': 'Esperanto', 'et': 'Estonian', 'tl': 'Filipino', 'fi': 'Finnish', 'fr': 'French', 'fy': 'Frisian',
-    'gl': 'Galician', 'ka': 'Georgian', 'de': 'German', 'el': 'Greek', 'gu': 'Gujarati', 'ht': 'Haitian Creole',
-    'ha': 'Hausa', 'haw': 'Hawaiian', 'iw': 'Hebrew', 'hi': 'Hindi', 'hmn': 'Hmong', 'hu': 'Hungarian',
-    'is': 'Icelandic', 'ig': 'Igbo', 'id': 'Indonesian', 'ga': 'Irish', 'it': 'Italian', 'ja': 'Japanese',
-    'jw': 'Javanese', 'kn': 'Kannada', 'kk': 'Kazakh', 'km': 'Khmer', 'rw': 'Kinyarwanda', 'ko': 'Korean',
-    'ku': 'Kurdish (Kurmanji)', 'ky': 'Kyrgyz', 'lo': 'Lao', 'la': 'Latin', 'lv': 'Latvian', 'lt': 'Lithuanian',
-    'lb': 'Luxembourgish', 'mk': 'Macedonian', 'mg': 'Malagasy', 'ms': 'Malay', 'ml': 'Malayalam', 'mt': 'Maltese',
-    'mi': 'Maori', 'mr': 'Marathi', 'mn': 'Mongolian', 'my': 'Myanmar (Burmese)', 'ne': 'Nepali', 'no': 'Norwegian',
-    'or': 'Odia (Oriya)', 'ps': 'Pashto', 'fa': 'Persian', 'pl': 'Polish', 'pt': 'Portuguese', 'pa': 'Punjabi',
-    'ro': 'Romanian', 'ru': 'Russian', 'sm': 'Samoan', 'gd': 'Scots Gaelic', 'sr': 'Serbian', 'st': 'Sesotho',
-    'sn': 'Shona', 'sd': 'Sindhi', 'si': 'Sinhala', 'sk': 'Slovak', 'sl': 'Slovenian', 'so': 'Somali',
-    'es': 'Spanish', 'su': 'Sundanese', 'sw': 'Swahili', 'sv': 'Swedish', 'tg': 'Tajik', 'ta': 'Tamil',
-    'tt': 'Tatar', 'te': 'Telugu', 'th': 'Thai', 'tr': 'Turkish', 'tk': 'Turkmen', 'uk': 'Ukrainian',
-    'ur': 'Urdu', 'ug': 'Uyghur', 'uz': 'Uzbek', 'vi': 'Vietnamese', 'cy': 'Welsh', 'xh': 'Xhosa',
-    'yi': 'Yiddish', 'yo': 'Yoruba', 'zu': 'Zulu'
-}
-
-import re
-
-def translate_text(text, target_lang, source_lang='auto'):
-    """
-    Translates text (or list of texts) with TRUE batching support.
-    Reduces network overhead by 90-95% via native translate_batch.
-    """
-    if not text:
-        return "" if isinstance(text, str) else []
-        
-    is_batch = isinstance(text, list)
-    text_list = text if is_batch else [text]
-    
-    # --- PHASE 1: PRE-TRANSLATION (MASKING) ---
-    masked_list = []
-    entities_map = [] # Store entities per item
-    
-    num_pattern = r'\b\d+(?:[.,]\d+)*\b'
-    name_pattern = r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b'
-    EXCLUSIONS = {'The', 'My', 'This', 'A', 'An', 'Our', 'Your', 'Their', 'His', 'Her', 'It', 'There', 'Where', 'When', 'Who', 'How', 'That', 'These', 'Those'}
-
-    for item in text_list:
-        if not item.strip():
-            masked_list.append(item)
-            entities_map.append([])
-            continue
-            
-        current_entities = []
-        def mask_entities(match):
-            val = match.group(0)
-            if val in EXCLUSIONS: return val
-            if val not in current_entities: current_entities.append(val)
-            return f"[[P_{current_entities.index(val)}]]"
-
-        masked_item = re.sub(num_pattern, mask_entities, item)
-        masked_item = re.sub(name_pattern, mask_entities, masked_item)
-        masked_list.append(masked_item)
-        entities_map.append(current_entities)
-
-    # --- PHASE 2: TRUE BATCH TRANSLATION ---
-    translated_list = []
-    try:
-        translator = GoogleTranslator(source=source_lang, target=target_lang)
-        
-        # Split into batches of 20 to stay safe with API limits/timeouts
-        batch_size = 20
-        for i in range(0, len(masked_list), batch_size):
-            batch = masked_list[i : i + batch_size]
-            try:
-                # ONE network request for the entire batch
-                batch_results = translator.translate_batch(batch)
-                translated_list.extend(batch_results)
-            except Exception as b_err:
-                safe_log(f"Batch execution error: {str(b_err)}")
-                # Fallback: Just return the masked batch if it fails entirely
-                translated_list.extend(batch)
-
-    except Exception as e:
-        safe_log(f"Translator setup error: {str(e)}")
-        translated_list = masked_list
-
-    # --- PHASE 3: POST-TRANSLATION (UNMASKING) ---
-    final_results = []
-    for i, trans_item in enumerate(translated_list):
-        if not trans_item or not isinstance(trans_item, str):
-            # Fallback to original if translation failed or returned non-string
-            final_results.append(text_list[i])
-            continue
-            
-        item_entities = entities_map[i]
-        for idx, original_val in enumerate(item_entities):
-            placeholder = f"[[P_{idx}]]"
-            trans_item = trans_item.replace(placeholder, original_val)
-            trans_item = trans_item.replace(f"[[p_{idx}]]", original_val)
-            trans_item = trans_item.replace(f"[P_{idx}]", original_val)
-        final_results.append(trans_item)
-
-    return final_results if is_batch else final_results[0]
-
 def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
-    """User-requested PDF translation via text extraction"""
+    """PDF translation with chunking"""
     try:
         text_content = []
         with open(input_path, 'rb') as file:
@@ -203,8 +109,8 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
                 else:
                     text_content.append("")
         
-        # Save as text (Note: We use output_path derived from app.py)
-        with open(output_path, 'w', encoding='utf-8') as f:
+        output_txt = output_path.replace('.pdf', '.txt')
+        with open(output_txt, 'w', encoding='utf-8') as f:
             f.write('\n\n'.join(text_content))
         
         return True, f"PDF translation completed: {total_pages} pages"
@@ -216,131 +122,64 @@ def translate_docx(input_path, output_path, target_lang):
     """DOCX Translation with deep table and formatting preservation"""
     try:
         doc = Document(input_path)
-        
-        # 1. Process Main Paragraphs with Batching
-        # Collecting non-empty paragraphs for batch translation
-        batch_text = []
-        batch_paras = []
-        current_batch_len = 0
-        
-        def process_batch(text_list, para_list):
-            if not text_list: return
-            translated_list = translate_text(text_list, target_lang)
-            
-            # Map back to paragraphs
-            for i, para in enumerate(para_list):
-                para.text = translated_list[i]
-
         for para in doc.paragraphs:
             if para.text.strip():
-                p_text = para.text
-                if current_batch_len + len(p_text) > 2000: # Smaller batches for higher reliability
-                    process_batch(batch_text, batch_paras)
-                    batch_text, batch_paras, current_batch_len = [], [], 0
+                para.text = translate_text_safe(para.text, target_lang)
                 
-                batch_text.append(p_text)
-                batch_paras.append(para)
-                current_batch_len += len(p_text)
-        
-        # Final batch
-        process_batch(batch_text, batch_paras)
-                
-        # 2. Process Tables (Detection feature requested)
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
-                    # Recursive check for nested tables (though Document.tables only gets top-level)
                     for para in cell.paragraphs:
                         if para.text.strip():
-                            para.text = translate_text(para.text, target_lang)
-                    
-                    # Handle nested tables inside cells if any
-                    if cell.tables:
-                        for nested_table in cell.tables:
-                            for n_row in nested_table.rows:
-                                for n_cell in n_row.cells:
-                                    for n_para in n_cell.paragraphs:
-                                        if n_para.text.strip():
-                                            n_para.text = translate_text(n_para.text, target_lang)
+                            para.text = translate_text_safe(para.text, target_lang)
                             
         doc.save(output_path)
-        return True, "DOCX translated with tables preserved"
-    except Exception as e:
-        return False, str(e)
-
-def translate_txt(input_path, output_path, target_lang):
-    """TXT to Translated TXT"""
-    try:
-        with open(input_path, 'r', encoding='utf-8') as f:
-            text = f.read()
-            
-        translated_text = translate_text(text, target_lang)
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(translated_text)
-            
-        return True, "Text file translated successfully"
+        return True, "DOCX translated successfully"
     except Exception as e:
         return False, str(e)
 
 def translate_xlsx(input_path, output_path, target_lang):
-    """Excel to Translated Excel (Multi-sheet) with Visibility Fix"""
+    """Excel to Translated Excel (Multi-sheet)"""
     try:
         import pandas as pd
-        # Read all sheets, including hidden ones
         all_sheets = pd.read_excel(input_path, sheet_name=None)
         
-        if not all_sheets:
-            return False, "The Excel file contains no sheets"
-            
-        def cell_translator(val):
-            if isinstance(val, str) and val.strip():
-                return translate_text(val, target_lang)
-            return val
-            
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             for sheet_name, df in all_sheets.items():
-                # Element-wise translation
                 for col in df.columns:
-                    df[col] = df[col].apply(cell_translator)
-                
-                # Write back to excel
+                    df[col] = df[col].apply(lambda x: translate_text_safe(str(x), target_lang) if pd.notnull(x) and str(x).strip() else x)
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
                 
-            # --- FIX: Visibility Enforcement ---
-            # openpyxl requires at least one visible sheet. 
-            # We explicitly set all translated sheets to visible.
-            workbook = writer.book
-            for worksheet in workbook.worksheets:
-                worksheet.sheet_state = 'visible'
-                
-        return True, "Excel file translated successfully with sheets preserved"
+        return True, "Excel file translated successfully"
+    except Exception as e:
+        return False, str(e)
+
+def translate_txt(input_path, output_path, target_lang):
+    """TXT Translation"""
+    try:
+        with open(input_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+        translated_text = translate_text_safe(text, target_lang)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(translated_text)
+        return True, "Text file translated successfully"
     except Exception as e:
         return False, str(e)
 
 def translate_csv(input_path, output_path, target_lang):
-    """CSV to Translated CSV"""
+    """CSV Translation"""
     try:
         import pandas as pd
         df = pd.read_csv(input_path)
-        
-        def cell_translator(val):
-            if isinstance(val, str) and val.strip():
-                return translate_text(val, target_lang)
-            return val
-            
         for col in df.columns:
-            df[col] = df[col].apply(cell_translator)
-            
+            df[col] = df[col].apply(lambda x: translate_text_safe(str(x), target_lang) if pd.notnull(x) and str(x).strip() else x)
         df.to_csv(output_path, index=False)
         return True, "CSV file translated successfully"
     except Exception as e:
         return False, str(e)
 
-# ============ DISPATCHER ============
-
 def translate_document(input_path, output_path, target_lang, source_lang='auto', file_ext=None):
-    """Dispatcher function with better error handling"""
+    """Main dispatcher function using stable translators library"""
     try:
         if file_ext is None:
             file_ext = os.path.splitext(input_path)[1].lower()
