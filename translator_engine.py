@@ -203,12 +203,15 @@ def translate_txt(input_path, output_path, target_lang):
         return False, str(e)
 
 def translate_xlsx(input_path, output_path, target_lang):
-    """Excel to Translated Excel (Multi-sheet)"""
+    """Excel to Translated Excel (Multi-sheet) with Visibility Fix"""
     try:
         import pandas as pd
-        # Read all sheets
+        # Read all sheets, including hidden ones
         all_sheets = pd.read_excel(input_path, sheet_name=None)
         
+        if not all_sheets:
+            return False, "The Excel file contains no sheets"
+            
         def cell_translator(val):
             if isinstance(val, str) and val.strip():
                 return translate_text(val, target_lang)
@@ -217,12 +220,20 @@ def translate_xlsx(input_path, output_path, target_lang):
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             for sheet_name, df in all_sheets.items():
                 # Element-wise translation
-                # Use applymap for older pandas or map for newer, but apply works across columns
                 for col in df.columns:
                     df[col] = df[col].apply(cell_translator)
+                
+                # Write back to excel
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
                 
-        return True, "Excel file translated successfully"
+            # --- FIX: Visibility Enforcement ---
+            # openpyxl requires at least one visible sheet. 
+            # We explicitly set all translated sheets to visible.
+            workbook = writer.book
+            for worksheet in workbook.worksheets:
+                worksheet.sheet_state = 'visible'
+                
+        return True, "Excel file translated successfully with sheets preserved"
     except Exception as e:
         return False, str(e)
 
