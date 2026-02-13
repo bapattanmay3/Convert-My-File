@@ -51,6 +51,9 @@
                         <option value="docx">Word Document (.docx)</option>
                         <option value="pdf">PDF Document (.pdf)</option>
                         <option value="txt">Text File (.txt)</option>
+                        <option value="xlsx">Excel Spreadsheet (.xlsx)</option>
+                        <option value="pptx">PowerPoint (.pptx)</option>
+                        <option value="html">HTML File (.html)</option>
                     </select>
                 </div>
 
@@ -315,11 +318,27 @@
                 // Filter format options based on input file
                 const ext = fileSelectedFile.name.split('.').pop().toLowerCase();
                 Array.from(fileFormatSelect.options).forEach(opt => {
-                    if (ext === 'pdf' && opt.value === 'pdf') opt.style.display = 'none';
-                    else if (ext === 'docx' && opt.value === 'docx') opt.style.display = 'none';
-                    else if (ext === 'txt' && opt.value === 'txt') opt.style.display = 'none';
-                    else opt.style.display = 'block';
+                    // Default: Hide all, then show valid ones
+                    opt.style.display = 'none';
+
+                    if (ext === 'pdf') {
+                        if (['docx', 'txt', 'xlsx'].includes(opt.value)) opt.style.display = 'block';
+                    } else if (ext === 'docx') {
+                        if (['pdf', 'txt'].includes(opt.value)) opt.style.display = 'block';
+                    } else if (ext === 'txt') {
+                        if (['pdf', 'docx'].includes(opt.value)) opt.style.display = 'block';
+                    } else if (ext === 'xlsx') {
+                        if (['pdf'].includes(opt.value)) opt.style.display = 'block';
+                    } else if (ext === 'pptx') {
+                        if (['pdf', 'txt'].includes(opt.value)) opt.style.display = 'block';
+                    } else if (ext === 'html') {
+                        if (['pdf'].includes(opt.value)) opt.style.display = 'block';
+                    }
                 });
+
+                // Auto-select first visible option
+                const firstVisible = Array.from(fileFormatSelect.options).find(opt => opt.style.display === 'block');
+                if (firstVisible) fileFormatSelect.value = firstVisible.value;
             }
         };
 

@@ -4,6 +4,10 @@ from PIL import Image
 import PyPDF2
 import shutil
 from docx import Document
+import pandas as pd
+import tabula
+from pptx import Presentation
+from weasyprint import HTML
 
 # ============ FILE CONVERSIONS ============
 
@@ -124,12 +128,78 @@ def convert_pdf_to_image(input_path, output_path, target_format='png'):
     except Exception as e:
         return False, str(e)
 
+# ============ DATA & TABLE CONVERSIONS ============
+
+def convert_pdf_to_excel(input_path, output_path):
+    """PDF to Excel (Table Extraction)"""
+    try:
+        # Extract tables into a list of DataFrames
+        dfs = tabula.read_pdf(input_path, pages='all', multiple_tables=True)
+        if not dfs:
+            return False, "No tables found in PDF"
+        
+        # Write all tables to a single Excel file
+        with pd.ExcelWriter(output_path) as writer:
+            for i, df in enumerate(dfs):
+                df.to_excel(writer, sheet_name=f'Table_{i+1}', index=False)
+        
+        return True, "PDF tables successfully extracted to Excel"
+    except Exception as e:
+        return False, f"Table extraction failed: {str(e)}"
+
+def convert_excel_to_pdf(input_path, output_path):
+    """Excel to PDF (via HTML intermediate)"""
+    try:
+        df = pd.read_excel(input_path)
+        html_content = df.to_html()
+        HTML(string=html_content).write_pdf(output_path)
+        return True, "Excel to PDF conversion successful"
+    except Exception as e:
+        return False, str(e)
+
+# ============ PRESENTATION CONVERSIONS ============
+
+def convert_pptx_to_pdf(input_path, output_path):
+    """PowerPoint to PDF (placeholder for non-Windows)"""
+    try:
+        # On Windows, we could use comtypes, but for a general solution,
+        # we'd need another library or a cloud API. For now, using as placeholder.
+        return False, "PowerPoint to PDF requires system-specific utilities or LibreOffice"
+    except Exception as e:
+        return False, str(e)
+
+def convert_pptx_to_txt(input_path, output_path):
+    """PowerPoint to Text"""
+    try:
+        prs = Presentation(input_path)
+        text = ""
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "text"):
+                    text += shape.text + "\n"
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(text)
+        return True, "PowerPoint text successfully extracted"
+    except Exception as e:
+        return False, str(e)
+
+# ============ WEB CONVERSIONS ============
+
+def convert_html_to_pdf(input_path, output_path):
+    """HTML to PDF"""
+    try:
+        HTML(input_path).write_pdf(output_path)
+        return True, "HTML to PDF conversion successful"
+    except Exception as e:
+        return False, str(e)
+
 # ============ SUPPORTED FORMATS ============
 
 FILE_CONVERSIONS = {
     'pdf': {
         'docx': convert_pdf_to_docx,
         'txt': convert_pdf_to_txt,
+        'xlsx': convert_pdf_to_excel,
     },
     'docx': {
         'pdf': convert_docx_to_pdf,
@@ -138,6 +208,16 @@ FILE_CONVERSIONS = {
     'txt': {
         'pdf': convert_txt_to_pdf,
         'docx': convert_txt_to_docx,
+    },
+    'xlsx': {
+        'pdf': convert_excel_to_pdf,
+    },
+    'pptx': {
+        'txt': convert_pptx_to_txt,
+        'pdf': convert_pptx_to_pdf,
+    },
+    'html': {
+        'pdf': convert_html_to_pdf,
     }
 }
 
