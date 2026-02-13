@@ -1,128 +1,104 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "base.html" %}
+{% block content %}
+<div class="tool-container">
+    <div class="tool-header">
+        <h1>🔄 File Converter</h1>
+        <p>Convert PDF, DOCX, and Images</p>
+    </div>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Converter - {{ site_name }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <style>
-        .upload-container {
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px dashed rgba(255, 107, 74, 0.3);
-            border-radius: 20px;
-            padding: 40px;
-            margin-top: 30px;
-            transition: border-color 0.3s;
-        }
-
-        .upload-container:hover {
-            border-color: var(--primary);
-        }
-
-        .file-input {
-            margin-bottom: 20px;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
-
-        .custom-file-upload {
-            background: var(--primary);
-            color: white;
-            padding: 12px 30px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-weight: 600;
-            display: inline-block;
-            transition: transform 0.2s, background 0.2s;
-        }
-
-        .custom-file-upload:hover {
-            transform: scale(1.05);
-            background: #ff8a5c;
-        }
-
-        .btn-convert {
-            background: white;
-            color: var(--dark);
-            border: none;
-            padding: 12px 40px;
-            border-radius: 30px;
-            font-weight: 700;
-            margin-top: 20px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .btn-convert:hover {
-            background: #eee;
-        }
-
-        .back-link {
-            display: block;
-            margin-top: 30px;
-            color: #888;
-            text-decoration: none;
-        }
-
-        .back-link:hover {
-            color: var(--primary);
-        }
-
-        #file-name {
-            margin-top: 15px;
-            color: #ccc;
-        }
-
-        .flash-messages {
-            margin-top: 20px;
-            color: #ff6b4a;
-        }
-    </style>
-</head>
-
-<body>
-    <div class="container">
-        <a href="/" class="back-link">← Back to Tools</a>
-        <h1>🔄 Converter</h1>
-        <p class="tagline">Convert PDF to DOCX, DOCX to PDF, or Images to PDF</p>
-
-        <div class="upload-container">
-            <form action="/convert" method="POST" enctype="multipart/form-data">
-                <div class="file-input">
-                    <label for="file-upload" class="custom-file-upload">
-                        Choose File
-                    </label>
-                    <input id="file-upload" name="file" type="file" onchange="updateFileName()" />
-                    <div id="file-name">No file selected</div>
-                </div>
-                <button type="submit" class="btn-convert">Convert Now</button>
-            </form>
-            {% with messages = get_flashed_messages() %}
-            {% if messages %}
-            <div class="flash-messages">
-                {% for message in messages %}
-                <p>{{ message }}</p>
-                {% endfor %}
+    <div class="converter-card">
+        <div class="upload-area" id="dropArea">
+            <div class="upload-content">
+                <span class="upload-icon">📁</span>
+                <h3>Drag & Drop or Click to Upload</h3>
+                <p>Supported: PDF, DOCX, JPG, PNG (Max 50MB)</p>
+                <input type="file" id="fileInput" hidden>
+                <button class="btn btn-primary" id="browseBtn">Choose File</button>
             </div>
-            {% endif %}
-            {% endwith %}
         </div>
 
-        <script>
-            function updateFileName() {
-                const input = document.getElementById('file-upload');
-                const fileName = document.getElementById('file-name');
-                if (input.files.length > 0) {
-                    fileName.textContent = input.files[0].name;
-                } else {
-                    fileName.textContent = 'No file selected';
-                }
-            }
-        </script>
-    </div>
-</body>
+        <div id="fileInfo" class="file-info" style="display: none;">
+            <p><strong>File:</strong> <span id="fileName"></span></p>
+            <p><strong>Size:</strong> <span id="fileSize"></span></p>
+        </div>
 
-</html>
+        <div class="convert-options">
+            <label>Convert to:</label>
+            <select id="formatSelect" class="form-select">
+                <option value="docx">Word Document (.docx)</option>
+                <option value="pdf">PDF (.pdf)</option>
+                <option value="jpg">JPEG Image (.jpg)</option>
+            </select>
+
+            <button id="convertBtn" class="btn btn-success" disabled>
+                🔄 Convert File
+            </button>
+        </div>
+
+        <div id="result" style="display: none;"></div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const browseBtn = document.getElementById('browseBtn');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const convertBtn = document.getElementById('convertBtn');
+        const formatSelect = document.getElementById('formatSelect');
+        const result = document.getElementById('result');
+
+        let selectedFile = null;
+
+        browseBtn.onclick = () => fileInput.click();
+
+        fileInput.onchange = (e) => {
+            if (e.target.files[0]) {
+                selectedFile = e.target.files[0];
+                fileName.textContent = selectedFile.name;
+                fileSize.textContent = (selectedFile.size / 1024).toFixed(2) + ' KB';
+                fileInfo.style.display = 'block';
+                convertBtn.disabled = false;
+            }
+        };
+
+        convertBtn.onclick = async () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('format', formatSelect.value);
+
+            convertBtn.disabled = true;
+            convertBtn.textContent = 'Converting...';
+
+            try {
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    result.innerHTML = `<div class="success">
+                    ✅ Conversion successful! 
+                    <a href="${data.download_url}" class="btn btn-small">Download</a>
+                </div>`;
+                } else {
+                    result.innerHTML = `<div class="error">❌ ${data.error}</div>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<div class="error">❌ Network error</div>`;
+            } finally {
+                convertBtn.disabled = false;
+                convertBtn.textContent = '🔄 Convert File';
+                result.style.display = 'block';
+            }
+        };
+    });
+</script>
+{% endblock %}
