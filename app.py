@@ -310,44 +310,46 @@ def convert_image():
 @app.route('/translate', methods=['POST'])
 def translate():
     """Handle document translation"""
-    if 'file' not in request.files:
-        flash('No file uploaded')
-        return redirect(url_for('translator'))
-    
-    file = request.files['file']
-    if file.filename == '':
-        flash('No file selected')
-        return redirect(url_for('translator'))
-    
-    target_lang = request.form.get('target_lang', 'en')
-    
-    # Save uploaded file
-    filename = secure_filename(file.filename)
-    unique_id = str(uuid.uuid4())
-    input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
-    file.save(input_path)
-    
-    # Get extension
-    ext = os.path.splitext(filename)[1].lower().replace('.', '')
-    
-    # Preserve the original extension for all formats
-    target_ext = ext
-    output_filename = f"translated_{unique_id}_{os.path.splitext(filename)[0]}.{target_ext}"
-    output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
-    
-    # Translate
-    success, message = translate_file(input_path, output_path, ext, target_lang)
-    
-    if success and os.path.exists(output_path):
-        return jsonify({
-            'success': True,
-            'message': message,
-            'download_url': f'/download/{output_filename}',
-            'preview_filename': output_filename,
-            'filename': output_filename
-        })
-    else:
-        return jsonify({'success': False, 'error': message}), 500
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        
+        target_lang = request.form.get('target_lang', 'en')
+        
+        # Save uploaded file
+        filename = secure_filename(file.filename)
+        unique_id = str(uuid.uuid4())
+        input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
+        file.save(input_path)
+        
+        # Get extension
+        ext = os.path.splitext(filename)[1].lower().replace('.', '')
+        
+        # Preserve the original extension for all formats
+        target_ext = ext
+        output_filename = f"translated_{unique_id}_{os.path.splitext(filename)[0]}.{target_ext}"
+        output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+        
+        # Translate
+        success, message = translate_file(input_path, output_path, ext, target_lang)
+        
+        if success and os.path.exists(output_path):
+            return jsonify({
+                'success': True,
+                'message': message,
+                'download_url': f'/download/{output_filename}',
+                'preview_filename': output_filename,
+                'filename': output_filename
+            })
+        else:
+            return jsonify({'success': False, 'error': message or "Translation failed"}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': f"Processing error: {str(e)}"}), 500
 
 @app.route('/get-preview/<filename>')
 def get_preview(filename):

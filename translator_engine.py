@@ -78,27 +78,39 @@ def translate_text(text, target_lang, source_lang='auto'):
     masked_text = re.sub(name_pattern, mask_entities, masked_text)
 
     # --- PHASE 2: TRANSLATION ---
-    translator = GoogleTranslator(source=source_lang, target=target_lang)
-    
-    # Split text into chunks of 4500 characters
-    chunk_size = 4500
-    chunks = [masked_text[i:i+chunk_size] for i in range(0, len(masked_text), chunk_size)]
-    
-    translated_chunks = []
-    for chunk in chunks:
-        try:
-            # Google Translate handles [[P_0]] style placeholders well (usually ignores them)
-            translated_chunks.append(translator.translate(chunk))
-        except Exception as e:
-            print(f"Translation chunk error: {e}")
-            translated_chunks.append(chunk)
-            
-    translated_text = "".join(translated_chunks)
+    try:
+        translator = GoogleTranslator(source=source_lang, target=target_lang)
+        
+        # Split text into chunks of 4500 characters
+        chunk_size = 4500
+        chunks = [masked_text[i:i+chunk_size] for i in range(0, len(masked_text), chunk_size)]
+        
+        translated_chunks = []
+        for chunk in chunks:
+            try:
+                result = translator.translate(chunk)
+                # NoneType Safety: If result is None, fallback to original chunk
+                translated_chunks.append(result if result is not None else chunk)
+            except Exception as e:
+                print(f"Translation chunk error: {e}")
+                translated_chunks.append(chunk)
+                
+        translated_text = "".join(translated_chunks)
+    except Exception as e:
+        print(f"Translator setup error: {e}")
+        translated_text = masked_text
 
     # --- PHASE 3: UNMASKING ---
+    if not translated_text:
+        return text
+
     # Restore the original entities
     for idx, original_val in enumerate(entities):
         placeholder = f"[[P_{idx}]]"
+        # Safety: Ensure translated_text is still a string
+        if not isinstance(translated_text, str):
+            break
+            
         # Some translators might remove brackets or change casing of placeholders, 
         # so we do a few common variations just in case.
         translated_text = translated_text.replace(placeholder, original_val)
@@ -153,16 +165,43 @@ def translate_docx(input_path, output_path, target_lang):
     try:
         doc = Document(input_path)
         
-        # 1. Process Main Paragraphs
+        # 1. Process Main Paragraphs with Batching
+        # Collecting non-empty paragraphs for batch translation
+        batch_text = []
+        batch_paras = []
+        current_batch_len = 0
+        
+        def process_batch(text_list, para_list):
+            if not text_list: return
+            # Join with newline for batch translation
+            joined_text = "\n".join(text_list)
+            translated_joined = translate_text(joined_text, target_lang)
+            translated_lines = translated_joined.split("\n")
+            
+            # If line counts match, assign back. Otherwise, fallback to one-by-one.
+            if len(translated_lines) == len(para_list):
+                for i, para in enumerate(para_list):
+                    para.text = translated_lines[i]
+            else:
+                # Fallback: Translate individually for this batch
+                for para in para_list:
+                    para.text = translate_text(para.text, target_lang)
+
         for para in doc.paragraphs:
             if para.text.strip():
-                # We translate at the paragraph level but try to keep runs 
-                # (Simple approach: replace whole paragraph text)
-                # For better results while keeping format, one could translate runs 
-                # but Google Translate needs context, so paragraph level is safer.
-                original_text = para.text
-                translated_text = translate_text(original_text, target_lang)
-                para.text = translated_text
+                p_text = para.text
+                if current_batch_len + len(p_text) > 4000:
+                    process_batch(batch_text, batch_paras)
+                    batch_text = []
+                    batch_paras = []
+                    current_batch_len = 0
+                
+                batch_text.append(p_text)
+                batch_paras.append(para)
+                current_batch_len += len(p_text)
+        
+        # Final batch
+        process_batch(batch_text, batch_paras)
                 
         # 2. Process Tables (Detection feature requested)
         for table in doc.tables:
