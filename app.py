@@ -59,24 +59,21 @@ def convert_file():
     # Get file extension
     ext = os.path.splitext(filename)[1].lower().replace('.', '')
     
-    # Import converter functions
-    from converter import FILE_CONVERSIONS
+    # Import universal converter
+    from converter_universal import convert_file as universal_convert
     
-    # Check if conversion is supported
-    if ext in FILE_CONVERSIONS and target_format in FILE_CONVERSIONS[ext]:
-        success, message = FILE_CONVERSIONS[ext][target_format](input_path, output_path)
-        
-        if success and os.path.exists(output_path):
-            return jsonify({
-                'success': True,
-                'message': message,
-                'download_url': f'/download/{output_filename}',
-                'filename': output_filename
-            })
-        else:
-            return jsonify({'success': False, 'error': message}), 500
+    # Run conversion
+    success, message = universal_convert(input_path, output_path, ext, target_format)
+    
+    if success and os.path.exists(output_path):
+        return jsonify({
+            'success': True,
+            'message': message,
+            'download_url': f'/download/{output_filename}',
+            'filename': output_filename
+        })
     else:
-        return jsonify({'success': False, 'error': f'Conversion from {ext} to {target_format} is not supported'}), 400
+        return jsonify({'success': False, 'error': message}), 500
 
 @app.route('/convert-image', methods=['POST'])
 def convert_image():
@@ -106,7 +103,7 @@ def convert_image():
     ext = os.path.splitext(filename)[1].lower().replace('.', '')
     
     # Import converter functions
-    from converter import convert_image_to_image, convert_image_to_pdf
+    from converter_universal import convert_image_to_image, convert_image_to_pdf
     
     # Handle conversion
     if target_format == 'pdf':

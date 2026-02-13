@@ -54,6 +54,9 @@
                         <option value="xlsx">Excel Spreadsheet (.xlsx)</option>
                         <option value="pptx">PowerPoint (.pptx)</option>
                         <option value="html">HTML File (.html)</option>
+                        <option value="csv">CSV Sheet (.csv)</option>
+                        <option value="json">JSON Data (.json)</option>
+                        <option value="xml">XML Data (.xml)</option>
                     </select>
                 </div>
 
@@ -324,15 +327,19 @@
                     if (ext === 'pdf') {
                         if (['docx', 'txt', 'xlsx'].includes(opt.value)) opt.style.display = 'block';
                     } else if (ext === 'docx') {
-                        if (['pdf', 'txt'].includes(opt.value)) opt.style.display = 'block';
+                        if (['pdf', 'txt', 'html'].includes(opt.value)) opt.style.display = 'block';
                     } else if (ext === 'txt') {
                         if (['pdf', 'docx'].includes(opt.value)) opt.style.display = 'block';
-                    } else if (ext === 'xlsx') {
-                        if (['pdf'].includes(opt.value)) opt.style.display = 'block';
-                    } else if (ext === 'pptx') {
+                    } else if (ext === 'xlsx' || ext === 'xls') {
+                        if (['pdf', 'csv', 'json', 'xml', 'html'].includes(opt.value)) opt.style.display = 'block';
+                    } else if (ext === 'pptx' || ext === 'ppt') {
                         if (['pdf', 'txt'].includes(opt.value)) opt.style.display = 'block';
                     } else if (ext === 'html') {
                         if (['pdf'].includes(opt.value)) opt.style.display = 'block';
+                    } else if (ext === 'csv') {
+                        if (['xlsx', 'json', 'xml'].includes(opt.value)) opt.style.display = 'block';
+                    } else if (ext === 'json') {
+                        if (['csv', 'xlsx', 'xml'].includes(opt.value)) opt.style.display = 'block';
                     }
                 });
 
