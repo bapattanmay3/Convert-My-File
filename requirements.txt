@@ -1,0 +1,11 @@
+Flask==2.3.3
+gunicorn==21.2.0
+python-dotenv==1.0.0
+pdf2docx==0.5.8
+docx2pdf==0.1.8
+Pillow==12.1.0
+python-magic-bin==0.4.14; sys_platform == 'win32'
+python-magic==0.4.27; sys_platform != 'win32'
+deep-translator==1.11.4
+python-docx==1.1.0
+PyPDF2==3.0.1

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compressor - {{ site_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .upload-container {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px dashed rgba(255, 107, 74, 0.3);
+            border-radius: 20px;
+            padding: 40px;
+            margin-top: 30px;
+            transition: border-color 0.3s;
+        }
+
+        .upload-container:hover {
+            border-color: var(--primary);
+        }
+
+        .file-input {
+            margin-bottom: 25px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-upload {
+            background: var(--primary);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            display: inline-block;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .custom-file-upload:hover {
+            transform: scale(1.05);
+            background: #ff8a5c;
+        }
+
+        .btn-compress {
+            background: white;
+            color: var(--dark);
+            border: none;
+            padding: 12px 40px;
+            border-radius: 30px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-compress:hover {
+            background: #eee;
+        }
+
+        .back-link {
+            display: block;
+            margin-top: 30px;
+            color: #888;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            color: var(--primary);
+        }
+
+        #file-name {
+            margin-top: 15px;
+            color: #ccc;
+        }
+
+        .flash-messages {
+            margin-top: 20px;
+            color: #ff6b4a;
+        }
+
+        .compression-options {
+            margin-top: 20px;
+            margin-bottom: 30px;
+        }
+
+        .compression-options p {
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+
+        .option-group {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .option-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            color: #ddd;
+        }
+
+        input[type="radio"] {
+            accent-color: var(--primary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Tools</a>
+        <h1>📦 Compressor</h1>
+        <p class="tagline">Reduce file size of PDFs and Images without losing quality</p>
+
+        <div class="upload-container">
+            <form action="/compress" method="POST" enctype="multipart/form-data">
+                <div class="file-input">
+                    <label for="file-upload" class="custom-file-upload">
+                        Select File
+                    </label>
+                    <input id="file-upload" name="file" type="file" accept=".pdf,.png,.jpg,.jpeg"
+                        onchange="updateFileName()" />
+                    <div id="file-name">No file selected</div>
+                </div>
+
+                <div class="compression-options">
+                    <p>Compression Level:</p>
+                    <div class="option-group">
+                        <label><input type="radio" name="level" value="low"> Low</label>
+                        <label><input type="radio" name="level" value="medium" checked> Medium</label>
+                        <label><input type="radio" name="level" value="high"> High</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-compress">Compress & Download</button>
+            </form>
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for message in messages %}
+                <p>{{ message }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+        </div>
+
+        <script>
+            function updateFileName() {
+                const input = document.getElementById('file-upload');
+                const fileName = document.getElementById('file-name');
+                if (input.files.length > 0) {
+                    fileName.textContent = input.files[0].name;
+                } else {
+                    fileName.textContent = 'No file selected';
+                }
+            }
+        </script>
+    </div>
+</body>
+
+</html>

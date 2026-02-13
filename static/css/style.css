@@ -1,0 +1,66 @@
+:root {
+    --primary: #FF6B4A;
+    --dark: #1a1a1a;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background: var(--dark);
+    color: white;
+    margin: 0;
+    padding: 40px 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+h1 {
+    font-size: 3.5rem;
+    background: linear-gradient(135deg, #FF6B4A, #FF8A5C);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 10px;
+}
+
+.tagline {
+    color: #888;
+    font-size: 1.2rem;
+    margin-bottom: 50px;
+}
+
+.tools {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+    padding: 20px;
+}
+
+.tool-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 107, 74, 0.3);
+    border-radius: 16px;
+    padding: 30px 20px;
+    text-decoration: none;
+    color: white;
+    transition: transform 0.3s, border-color 0.3s;
+}
+
+.tool-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--primary);
+}
+
+.tool-card h3 {
+    margin: 0 0 10px 0;
+    color: var(--primary);
+}
+
+.tool-card p {
+    margin: 0;
+    color: #aaa;
+    font-size: 0.9rem;
+}

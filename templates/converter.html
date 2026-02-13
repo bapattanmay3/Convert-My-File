@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Converter - {{ site_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .upload-container {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px dashed rgba(255, 107, 74, 0.3);
+            border-radius: 20px;
+            padding: 40px;
+            margin-top: 30px;
+            transition: border-color 0.3s;
+        }
+
+        .upload-container:hover {
+            border-color: var(--primary);
+        }
+
+        .file-input {
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-upload {
+            background: var(--primary);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            display: inline-block;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .custom-file-upload:hover {
+            transform: scale(1.05);
+            background: #ff8a5c;
+        }
+
+        .btn-convert {
+            background: white;
+            color: var(--dark);
+            border: none;
+            padding: 12px 40px;
+            border-radius: 30px;
+            font-weight: 700;
+            margin-top: 20px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-convert:hover {
+            background: #eee;
+        }
+
+        .back-link {
+            display: block;
+            margin-top: 30px;
+            color: #888;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            color: var(--primary);
+        }
+
+        #file-name {
+            margin-top: 15px;
+            color: #ccc;
+        }
+
+        .flash-messages {
+            margin-top: 20px;
+            color: #ff6b4a;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Tools</a>
+        <h1>🔄 Converter</h1>
+        <p class="tagline">Convert PDF to DOCX, DOCX to PDF, or Images to PDF</p>
+
+        <div class="upload-container">
+            <form action="/convert" method="POST" enctype="multipart/form-data">
+                <div class="file-input">
+                    <label for="file-upload" class="custom-file-upload">
+                        Choose File
+                    </label>
+                    <input id="file-upload" name="file" type="file" onchange="updateFileName()" />
+                    <div id="file-name">No file selected</div>
+                </div>
+                <button type="submit" class="btn-convert">Convert Now</button>
+            </form>
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for message in messages %}
+                <p>{{ message }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+        </div>
+
+        <script>
+            function updateFileName() {
+                const input = document.getElementById('file-upload');
+                const fileName = document.getElementById('file-name');
+                if (input.files.length > 0) {
+                    fileName.textContent = input.files[0].name;
+                } else {
+                    fileName.textContent = 'No file selected';
+                }
+            }
+        </script>
+    </div>
+</body>
+
+</html>

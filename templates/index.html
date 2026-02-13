@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ site_name }} - File Converter</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <h1>✨ {{ site_name }}</h1>
+        <p class="tagline">Convert, Translate, Merge & Compress</p>
+
+        <div class="tools">
+            <a href="/converter" class="tool-card">
+                <h3>🔄 Converter</h3>
+                <p>PDF, DOCX, Images</p>
+            </a>
+            <a href="/translator" class="tool-card">
+                <h3>🌍 Translator</h3>
+                <p>30+ Languages</p>
+            </a>
+            <a href="/merger" class="tool-card">
+                <h3>📎 Merger</h3>
+                <p>Combine PDFs</p>
+            </a>
+            <a href="/compressor" class="tool-card">
+                <h3>📦 Compressor</h3>
+                <p>Reduce file size</p>
+            </a>
+        </div>
+    </div>
+</body>
+
+</html>
