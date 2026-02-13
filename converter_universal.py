@@ -1,6 +1,6 @@
 """
 Universal File Converter Engine
-Supports: PDF, DOCX, XLSX, PPTX, CSV, JSON, TXT, HTML
+Supports: PDF, DOCX, XLSX, PPTX, CSV, JSON, TXT, HTML, and Images
 Optimized for deployment and memory efficiency.
 """
 
@@ -74,6 +74,14 @@ def get_reportlab():
         from reportlab.lib.utils import simpleSplit
         _reportlab = (canvas, letter, simpleSplit)
     return _reportlab
+
+_PIL = None
+def get_PIL():
+    global _PIL
+    if _PIL is None:
+        from PIL import Image
+        _PIL = Image
+    return _PIL
 
 # ============ PDF CONVERSIONS ============
 
@@ -317,6 +325,50 @@ def convert_json_to_xml(input_path, output_path):
         tree = ET.ElementTree(root)
         tree.write(output_path, encoding='utf-8', xml_declaration=True)
         return True, "JSON to XML conversion successful"
+    except Exception as e:
+        return False, str(e)
+
+# ============ IMAGE CONVERSIONS ============
+
+def convert_image_to_image(input_path, output_path, target_format, quality=90):
+    """Convert image from one format to another"""
+    try:
+        Image = get_PIL()
+        image = Image.open(input_path)
+        
+        # Handle transparency for JPEG
+        if target_format.upper() in ['JPG', 'JPEG'] and image.mode in ('RGBA', 'LA', 'P'):
+            rgb_image = Image.new('RGB', image.size, (255, 255, 255))
+            if image.mode == 'P':
+                image = image.convert('RGBA')
+            rgb_image.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+            image = rgb_image
+        
+        save_format = 'JPEG' if target_format.upper() in ['JPG', 'JPEG'] else target_format.upper()
+        image.save(output_path, save_format, quality=quality, optimize=True)
+        return True, f"Image converted to {target_format.upper()}"
+    except Exception as e:
+        return False, str(e)
+
+def convert_image_to_pdf(input_path, output_path):
+    """Image to PDF"""
+    try:
+        Image = get_PIL()
+        image = Image.open(input_path)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        image.save(output_path, 'PDF')
+        return True, "Image to PDF conversion successful"
+    except Exception as e:
+        return False, str(e)
+
+def convert_pdf_to_image(input_path, output_path, target_format='png'):
+    """PDF to Image (first page only)"""
+    try:
+        from pdf2image import convert_from_path
+        images = convert_from_path(input_path, first_page=1, last_page=1)
+        images[0].save(output_path, target_format.upper())
+        return True, f"PDF to {target_format.upper()} conversion successful"
     except Exception as e:
         return False, str(e)
 
@@ -574,6 +626,17 @@ FILE_CONVERSIONS = {
     }
 }
 
+IMAGE_CONVERSIONS = {
+    'jpg': ['png', 'webp', 'pdf', 'jpeg'],
+    'jpeg': ['png', 'webp', 'pdf', 'jpg'],
+    'png': ['jpg', 'webp', 'pdf', 'jpeg'],
+    'webp': ['jpg', 'png', 'pdf', 'jpeg'],
+    'gif': ['png', 'jpg', 'webp', 'pdf'],
+    'bmp': ['png', 'jpg', 'webp', 'pdf']
+}
+
+SUPPORTED_IMAGE_INPUTS = list(IMAGE_CONVERSIONS.keys())
+
 def convert_file(input_path, output_path, source_format, target_format):
     """Universal conversion dispatcher"""
     source_format = source_format.lower().replace('.', '')
@@ -587,12 +650,3 @@ def convert_file(input_path, output_path, source_format, target_format):
             return False, f"Conversion from {source_format} to {target_format} not supported"
     else:
         return False, f"Source format {source_format} not supported"
-
-# Export image conversions from previous phase
-from converter import (
-    convert_image_to_image,
-    convert_image_to_pdf,
-    convert_pdf_to_image,
-    IMAGE_CONVERSIONS,
-    SUPPORTED_IMAGE_INPUTS
-)

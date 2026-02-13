@@ -2,7 +2,7 @@ import os
 import uuid
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
-from converter import convert_pdf_to_docx, convert_image_to_pdf, convert_docx_to_pdf
+from converter_universal import convert_pdf_to_docx, convert_image_to_pdf, convert_docx_to_pdf, convert_image_to_image
 
 app = Flask(__name__)
 app.config['SITE_NAME'] = 'Convert My File'
@@ -98,12 +98,6 @@ def convert_image():
     base_name = os.path.splitext(filename)[0]
     output_filename = f"converted_{unique_id}_{base_name}.{target_format}"
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
-    
-    # Get file extension
-    ext = os.path.splitext(filename)[1].lower().replace('.', '')
-    
-    # Import converter functions
-    from converter_universal import convert_image_to_image, convert_image_to_pdf
     
     # Handle conversion
     if target_format == 'pdf':
