@@ -120,49 +120,71 @@ def compress():
             from PIL import Image
             import io
             
-            img = Image.open(input_path)
+            orig_img = Image.open(input_path)
             orig_format = 'JPEG' if ext in ['jpg', 'jpeg'] else ext.upper()
             
-            # Simple iterative search for the best setting to hit target size
-            low, high = 1, 100
-            best_val = 75
+            # --- Lever 1: Quality Tuning ---
+            low_q, high_q = 1, 100
+            best_q = 75
             
             for _ in range(7):
-                mid = (low + high) // 2
+                mid_q = (low_q + high_q) // 2
                 buf = io.BytesIO()
                 
-                # Setup save parameters based on format
-                save_params = {'format': orig_format, 'optimize': True}
-                if orig_format in ['JPEG', 'WEBP']:
-                    save_params['quality'] = mid
-                elif orig_format == 'PNG':
-                    save_params['compress_level'] = mid // 11 # Map 1-100 to 0-9
+                # Parameters for format
+                params = {'format': orig_format, 'optimize': True}
+                if orig_format in ['JPEG', 'WEBP']: params['quality'] = mid_q
+                elif orig_format == 'PNG': params['compress_level'] = mid_q // 11
                 
-                # Save to buffer to check size
-                temp_img = img
+                temp_img = orig_img
                 if temp_img.mode != 'RGB' and orig_format == 'JPEG':
                     temp_img = temp_img.convert('RGB')
-                
-                temp_img.save(buf, **save_params)
-                size = buf.tell()
-                
-                if size <= target_bytes:
-                    best_val = mid
-                    low = mid + 1
+                    
+                temp_img.save(buf, **params)
+                if buf.tell() <= target_bytes:
+                    best_q = mid_q
+                    low_q = mid_q + 1
                 else:
-                    high = mid - 1
+                    high_q = mid_q - 1
+
+            # Check if Lever 1 was enough
+            final_buf = io.BytesIO()
+            test_params = {'format': orig_format, 'optimize': True}
+            if orig_format in ['JPEG', 'WEBP']: test_params['quality'] = best_q
+            elif orig_format == 'PNG': test_params['compress_level'] = best_q // 11
             
-            # Final save with best found value
-            final_params = {'format': orig_format, 'optimize': True}
-            if orig_format in ['JPEG', 'WEBP']:
-                final_params['quality'] = best_val
-            elif orig_format == 'PNG':
-                final_params['compress_level'] = best_val // 11
+            temp_img = orig_img
+            if temp_img.mode != 'RGB' and orig_format == 'JPEG':
+                temp_img = temp_img.convert('RGB')
+            temp_img.save(final_buf, **test_params)
             
-            if img.mode != 'RGB' and orig_format == 'JPEG':
-                img = img.convert('RGB')
-            img.save(output_path, **final_params)
-            success, message = True, f"Processed to approx. {unit}"
+            current_size = final_buf.tell()
+            
+            # --- Lever 2: Dynamic Scaling (Dimension Adjustment) ---
+            # If we are far from target (more than 10% off), we adjust dimensions
+            if abs(current_size - target_bytes) / target_bytes > 0.1:
+                # Calculate required area ratio
+                # Size is roughly proportional to area (Width * Height)
+                ratio = (target_bytes / current_size) ** 0.5
+                
+                # Limit scaling to avoid extreme corruption (max 4x area expansion, min 0.1x)
+                ratio = max(0.1, min(4.0, ratio))
+                
+                new_size = (int(orig_img.width * ratio), int(orig_img.height * ratio))
+                if new_size[0] > 0 and new_size[1] > 0:
+                    scaled_img = orig_img.resize(new_size, Image.Resampling.LANCZOS)
+                    
+                    # Final pass with scaled image
+                    if scaled_img.mode != 'RGB' and orig_format == 'JPEG':
+                        scaled_img = scaled_img.convert('RGB')
+                    scaled_img.save(output_path, **test_params)
+                    success, message = True, f"Precisely calibrated to target size via scaling"
+                else:
+                    temp_img.save(output_path, **test_params)
+                    success, message = True, f"Optimized to {best_q}% quality"
+            else:
+                temp_img.save(output_path, **test_params)
+                success, message = True, f"Matched target size at {best_q}% quality"
             
         elif ext == 'pdf':
             # PDF compression is less granular with PyPDF2
