@@ -1,25 +1,34 @@
 :root {
-    --primary: #FF6B4A;
-    --dark: #1a1a1a;
+    --primary: #ff6b4a;
+    --primary-hover: #ff8a5c;
+    --accent: #ff4d4d;
+    --dark: #0f172a;
+    --card-bg: rgba(30, 41, 59, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
 }
 
 body {
-    font-family: 'Inter', sans-serif;
-    background: var(--dark);
-    color: white;
+    font-family: 'Outfit', 'Inter', sans-serif;
+    background: radial-gradient(circle at top right, #1e293b, #0f172a);
+    color: var(--text-main);
     margin: 0;
-    padding: 40px 20px;
+    padding: 0;
+    min-height: 100vh;
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1000px;
     margin: 0 auto;
+    padding: 60px 20px;
     text-align: center;
 }
 
 h1 {
     font-size: 3.5rem;
-    background: linear-gradient(135deg, #FF6B4A, #FF8A5C);
+    font-weight: 800;
+    background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -27,40 +36,124 @@ h1 {
 }
 
 .tagline {
-    color: #888;
+    color: var(--text-muted);
     font-size: 1.2rem;
     margin-bottom: 50px;
 }
 
+/* Premium Warm Buttons */
+.btn-premium {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    color: white;
+    padding: 14px 35px;
+    border-radius: 30px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 10px 15px -3px rgba(255, 107, 74, 0.3);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.btn-premium:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 25px -5px rgba(255, 107, 74, 0.4);
+    background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%);
+}
+
+.btn-premium:active {
+    transform: translateY(0);
+}
+
+.btn-premium:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #475569;
+}
+
+/* Tools Grid */
 .tools {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 30px;
-    padding: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 25px;
+    margin-top: 20px;
 }
 
 .tool-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 107, 74, 0.3);
-    border-radius: 16px;
-    padding: 30px 20px;
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    padding: 35px 25px;
     text-decoration: none;
     color: white;
-    transition: transform 0.3s, border-color 0.3s;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
 }
 
 .tool-card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-8px);
     border-color: var(--primary);
+    background: rgba(30, 41, 59, 0.9);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
 }
 
 .tool-card h3 {
-    margin: 0 0 10px 0;
-    color: var(--primary);
+    margin: 0;
+    font-size: 1.5rem;
+    background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .tool-card p {
     margin: 0;
-    color: #aaa;
-    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.tool-icon {
+    font-size: 2.5rem;
+    margin-bottom: 5px;
+}
+
+/* Back Link Style */
+.back-link {
+    position: absolute;
+    top: 40px;
+    left: 40px;
+    color: var(--text-muted);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    transition: color 0.3s, transform 0.3s;
+    z-index: 100;
+}
+
+.back-link:hover {
+    color: var(--primary);
+    transform: translateX(-5px);
+}
+
+@media (max-width: 640px) {
+    .back-link {
+        position: static;
+        margin-bottom: 30px;
+        justify-content: center;
+    }
+
+    h1 {
+        font-size: 2.5rem;
+    }
 }

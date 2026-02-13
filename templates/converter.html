@@ -27,7 +27,7 @@
                     <h3>Drag & Drop or Click to Upload</h3>
                     <p>Supported: PDF, DOCX, TXT (Max 50MB)</p>
                     <input type="file" id="fileInput" accept=".pdf,.docx,.txt" hidden>
-                    <button class="btn btn-primary" id="fileBrowseBtn">Choose File</button>
+                    <button class="btn-premium" style="padding: 10px 25px;" id="fileBrowseBtn">Choose File</button>
                 </div>
             </div>
 
@@ -60,7 +60,7 @@
                     </select>
                 </div>
 
-                <button id="fileConvertBtn" class="btn btn-success btn-large">
+                <button id="fileConvertBtn" class="btn-premium" style="width: 100%; margin-top: 20px;">
                     🔄 Convert File
                 </button>
             </div>
@@ -85,7 +85,7 @@
                     <h3>Drag & Drop or Click to Upload</h3>
                     <p>Supported: JPG, PNG, WebP, GIF, BMP (Max 50MB)</p>
                     <input type="file" id="imageInput" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp" hidden>
-                    <button class="btn btn-primary" id="imageBrowseBtn">Choose Image</button>
+                    <button class="btn-premium" style="padding: 10px 25px;" id="imageBrowseBtn">Choose Image</button>
                 </div>
             </div>
 
@@ -119,7 +119,7 @@
                     <span id="qualityValue">90%</span>
                 </div>
 
-                <button id="imageConvertBtn" class="btn btn-success btn-large">
+                <button id="imageConvertBtn" class="btn-premium" style="width: 100%; margin-top: 20px;">
                     🔄 Convert Image
                 </button>
             </div>
@@ -133,25 +133,28 @@
 <style>
     .converter-tabs {
         display: flex;
-        gap: 10px;
-        margin-bottom: 30px;
+        gap: 15px;
+        margin-bottom: 40px;
         justify-content: center;
     }
 
     .tab-btn {
-        padding: 12px 30px;
-        border: none;
+        padding: 12px 35px;
+        border: 1px solid var(--glass-border);
         border-radius: 30px;
-        background: rgba(255, 255, 255, 0.05);
-        color: #aaa;
-        font-size: 1.1rem;
+        background: var(--card-bg);
+        color: var(--text-muted);
+        font-size: 1rem;
+        font-weight: 600;
         cursor: pointer;
         transition: all 0.3s;
     }
 
     .tab-btn.active {
-        background: var(--primary);
+        background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
         color: white;
+        border-color: transparent;
+        box-shadow: 0 10px 15px -3px rgba(255, 107, 74, 0.3);
     }
 
     .converter-section {
