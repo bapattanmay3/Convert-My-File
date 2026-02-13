@@ -25,13 +25,119 @@ def translator():
 
 @app.route('/merger')
 def merger():
-    # Placeholder for future implementation
     return render_template('merger.html', site_name=app.config['SITE_NAME'])
+
+@app.route('/merge', methods=['POST'])
+def merge_pdfs():
+    """Handle PDF merging"""
+    if 'files' not in request.files:
+        flash('No files uploaded')
+        return redirect(url_for('merger'))
+    
+    files = request.files.getlist('files')
+    if not files or files[0].filename == '':
+        flash('No files selected')
+        return redirect(url_for('merger'))
+    
+    from PyPDF2 import PdfMerger
+    merger = PdfMerger()
+    
+    unique_id = str(uuid.uuid4())
+    temp_files = []
+    
+    try:
+        for file in files:
+            filename = secure_filename(file.filename)
+            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"tmp_{unique_id}_{filename}")
+            file.save(temp_path)
+            temp_files.append(temp_path)
+            merger.append(temp_path)
+        
+        output_filename = f"merged_{unique_id}.pdf"
+        output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+        
+        with open(output_path, 'wb') as f:
+            merger.write(f)
+        
+        merger.close()
+        
+        # Cleanup temp files
+        for tmp in temp_files:
+            try:
+                os.remove(tmp)
+            except:
+                pass
+                
+        return send_from_directory(app.config['UPLOAD_FOLDER'], output_filename, as_attachment=True)
+    
+    except Exception as e:
+        flash(f'Merging failed: {str(e)}')
+        return redirect(url_for('merger'))
 
 @app.route('/compressor')
 def compressor():
-    # Placeholder for future implementation
     return render_template('compressor.html', site_name=app.config['SITE_NAME'])
+
+@app.route('/compress', methods=['POST'])
+def compress():
+    """Handle file compression (PDF and Images)"""
+    if 'file' not in request.files:
+        flash('No file uploaded')
+        return redirect(url_for('compressor'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected')
+        return redirect(url_for('compressor'))
+    
+    quality = int(request.form.get('quality', 60))
+    
+    # Save uploaded file
+    filename = secure_filename(file.filename)
+    unique_id = str(uuid.uuid4())
+    input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
+    file.save(input_path)
+    
+    # Get extension
+    ext = os.path.splitext(filename)[1].lower().replace('.', '')
+    
+    output_filename = f"compressed_{unique_id}_{filename}"
+    output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+    
+    try:
+        if ext == 'pdf':
+            from PyPDF2 import PdfReader, PdfWriter
+            reader = PdfReader(input_path)
+            writer = PdfWriter()
+            
+            for page in reader.pages:
+                page.compress_content_streams() # Basic compression
+                writer.add_page(page)
+            
+            with open(output_path, 'wb') as f:
+                writer.write(f)
+            success, message = True, "PDF compressed"
+        
+        elif ext in ['jpg', 'jpeg', 'png', 'webp']:
+            from PIL import Image
+            img = Image.open(input_path)
+            if img.mode != 'RGB' and ext in ['jpg', 'jpeg']:
+                img = img.convert('RGB')
+            
+            img.save(output_path, quality=quality, optimize=True)
+            success, message = True, "Image compressed"
+        else:
+            success, message = False, f"Format {ext} not supported for compression"
+            
+        if success and os.path.exists(output_path):
+            return send_from_directory(app.config['UPLOAD_FOLDER'], output_filename, as_attachment=True)
+        else:
+            flash(f'Compression failed: {message}')
+            return redirect(url_for('compressor'))
+            
+    except Exception as e:
+        flash(f'Compression failed: {str(e)}')
+        return redirect(url_for('compressor'))
 
 @app.route('/convert', methods=['POST'])
 def convert_file_universal():

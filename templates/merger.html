@@ -4,117 +4,256 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Merger - {{ site_name }}</title>
+    <title>PDF Merger - {{ site_name }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        .upload-container {
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px dashed rgba(255, 107, 74, 0.3);
+        :root {
+            --primary: #6366f1;
+            --secondary: #818cf8;
+            --dark: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tagline {
+            color: #94a3b8;
+            font-size: 1.1rem;
+            margin-bottom: 40px;
+        }
+
+        .tool-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .upload-area {
+            border: 2px dashed rgba(99, 102, 241, 0.3);
             border-radius: 20px;
             padding: 40px;
-            margin-top: 30px;
-            transition: border-color 0.3s;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(99, 102, 241, 0.02);
+            margin-bottom: 20px;
         }
 
-        .upload-container:hover {
+        .upload-area:hover {
             border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+            transform: translateY(-2px);
         }
 
-        .file-input {
-            margin-bottom: 25px;
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .custom-file-btn {
+            background: var(--primary);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 15px;
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
         }
 
         input[type="file"] {
             display: none;
         }
 
-        .custom-file-upload {
-            background: var(--primary);
-            color: white;
-            padding: 12px 30px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-weight: 600;
-            display: inline-block;
-            transition: transform 0.2s, background 0.2s;
+        .file-list {
+            margin-top: 20px;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+            padding-right: 10px;
         }
 
-        .custom-file-upload:hover {
-            transform: scale(1.05);
-            background: #ff8a5c;
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .file-name {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: #e2e8f0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 70%;
+        }
+
+        .file-size {
+            color: #94a3b8;
+            font-size: 0.8rem;
         }
 
         .btn-merge {
             background: white;
-            color: var(--dark);
+            color: #0f172a;
             border: none;
-            padding: 12px 40px;
-            border-radius: 30px;
+            padding: 16px 40px;
+            border-radius: 16px;
             font-weight: 700;
+            font-size: 1.1rem;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.3s;
+            width: 100%;
+            margin-top: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
 
-        .btn-merge:hover {
-            background: #eee;
+        .btn-merge:hover:not(:disabled) {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-merge:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .back-link {
-            display: block;
-            margin-top: 30px;
-            color: #888;
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            color: #94a3b8;
             text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: color 0.2s;
         }
 
         .back-link:hover {
             color: var(--primary);
         }
 
-        #file-list {
-            margin-top: 20px;
-            text-align: left;
-            max-width: 400px;
-            margin-left: auto;
-            margin-right: auto;
-            color: #ccc;
-        }
-
-        .file-item {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 10px 15px;
-            border-radius: 10px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
         .flash-messages {
             margin-top: 20px;
-            color: #ff6b4a;
+            padding: 15px;
+            border-radius: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .loading-dots:after {
+            content: '.';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+
+        @keyframes dots {
+
+            0%,
+            20% {
+                content: '.';
+            }
+
+            40% {
+                content: '..';
+            }
+
+            60% {
+                content: '...';
+            }
+
+            80%,
+            100% {
+                content: '';
+            }
+        }
+
+        @media (max-width: 640px) {
+            .back-link {
+                position: static;
+                margin-bottom: 20px;
+            }
+
+            h1 {
+                font-size: 2.2rem;
+            }
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <a href="/" class="back-link">← Back to Tools</a>
-        <h1>📎 Merger</h1>
-        <p class="tagline">Combine multiple PDF files into one single document</p>
+        <a href="/" class="back-link">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Back to Tools
+        </a>
 
-        <div class="upload-container">
-            <form action="/merge" method="POST" enctype="multipart/form-data">
-                <div class="file-input">
-                    <label for="file-upload" class="custom-file-upload">
-                        Select PDF Files
-                    </label>
-                    <input id="file-upload" name="files" type="file" multiple accept=".pdf"
-                        onchange="updateFileList()" />
-                    <div id="file-list">No files selected</div>
+        <h1>📑 PDF Merger</h1>
+        <p class="tagline">Combine multiple PDF documents into a single professional file</p>
+
+        <div class="tool-card">
+            <form id="merge-form" action="/merge" method="POST" enctype="multipart/form-data">
+                <div class="upload-area" onclick="document.getElementById('file-upload').click()">
+                    <span class="upload-icon">📚</span>
+                    <div class="custom-file-btn">Select PDF Files</div>
+                    <p style="color: #94a3b8;">Choose 2 or more PDF files</p>
+                    <input id="file-upload" name="files" type="file" accept=".pdf" multiple
+                        onchange="handleFileSelect(this)" />
                 </div>
 
-                <button type="submit" class="btn-merge">Merge & Download</button>
+                <div id="file-list" class="file-list"></div>
+
+                <button type="submit" id="submit-btn" class="btn-merge" disabled>
+                    <span>Merge PDFs</span>
+                </button>
             </form>
+
+            <div id="status-msg" style="margin-top: 20px; display: none; color: var(--primary);">
+                <span class="loading-dots">Merging documents</span>
+            </div>
+
             {% with messages = get_flashed_messages() %}
             {% if messages %}
             <div class="flash-messages">
@@ -125,26 +264,44 @@
             {% endif %}
             {% endwith %}
         </div>
-
-        <script>
-            function updateFileList() {
-                const input = document.getElementById('file-upload');
-                const fileList = document.getElementById('file-list');
-                fileList.innerHTML = '';
-
-                if (input.files.length > 0) {
-                    for (let i = 0; i < input.files.length; i++) {
-                        const div = document.createElement('div');
-                        div.className = 'file-item';
-                        div.innerHTML = `<span>📄 ${input.files[i].name}</span>`;
-                        fileList.appendChild(div);
-                    }
-                } else {
-                    fileList.textContent = 'No files selected';
-                }
-            }
-        </script>
     </div>
+
+    <script>
+        const form = document.getElementById('merge-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const statusMsg = document.getElementById('status-msg');
+        const fileList = document.getElementById('file-list');
+
+        function handleFileSelect(input) {
+            fileList.innerHTML = '';
+            if (input.files && input.files.length > 0) {
+                Array.from(input.files).forEach(file => {
+                    const item = document.createElement('div');
+                    item.className = 'file-item';
+                    item.innerHTML = `
+                        <span class="file-name">${file.name}</span>
+                        <span class="file-size">${(file.size / 1024).toFixed(1)} KB</span>
+                    `;
+                    fileList.appendChild(item);
+                });
+
+                if (input.files.length >= 2) {
+                    submitBtn.disabled = false;
+                } else {
+                    submitBtn.disabled = true;
+                }
+            } else {
+                submitBtn.disabled = true;
+            }
+        }
+
+        form.onsubmit = () => {
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.7';
+            submitBtn.querySelector('span').textContent = 'Merging...';
+            statusMsg.style.display = 'block';
+        };
+    </script>
 </body>
 
 </html>
