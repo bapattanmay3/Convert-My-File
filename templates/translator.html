@@ -1,93 +1,159 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>🌍 Translator</h1>
-<p class="tagline">High-Fidelity Document Translation across 100+ Languages</p>
+<div class="translator-container">
+    <div class="translator-main">
+        <h1>🌍 Translator</h1>
+        <p class="tagline">High-Fidelity Document Translation across 100+ Languages</p>
 
-<div class="converter-card">
-    <div id="upload-section">
-        <div class="upload-area" id="file-drop-area">
-            <span class="upload-icon">📄</span>
-            <div class="btn-premium" style="padding: 10px 25px; margin-bottom: 10px;" id="browse-btn">Select Document
-            </div>
-            <p style="color: var(--text-muted);">PDF, DOCX, or TXT</p>
-            <input id="file-upload" name="file" type="file" accept=".pdf,.docx,.txt" hidden />
-        </div>
+        <div class="converter-card" id="translator-card">
+            <div id="upload-section">
+                <div class="upload-area" id="file-drop-area">
+                    <span class="upload-icon">📄</span>
+                    <div class="btn-premium" style="padding: 10px 25px; margin-bottom: 10px;" id="browse-btn">Select
+                        Document</div>
+                    <p style="color: var(--text-muted);">PDF, DOCX, or TXT</p>
+                    <input id="file-upload" name="file" type="file" accept=".pdf,.docx,.txt" hidden />
+                </div>
 
-        <div id="file-info" class="file-info" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 1.5rem;">📄</span>
-                    <div style="display: flex; flex-direction: column;">
-                        <span id="display-name" style="font-weight: 600;"></span>
-                        <span id="display-size" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+                <div id="file-info" class="file-info" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1.5rem;">📄</span>
+                            <div style="display: flex; flex-direction: column;">
+                                <span id="display-name" style="font-weight: 600;"></span>
+                                <span id="display-size" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+                            </div>
+                        </div>
+                        <button type="button" id="remove-file" class="btn-icon">✖</button>
                     </div>
                 </div>
-                <button type="button" id="remove-file" class="btn-icon"
-                    style="color: var(--text-muted); background: none; border: none; cursor: pointer; font-size: 1.2rem;">✖</button>
+
+                <div id="translate-options" style="display: none; margin-top: 30px; text-align: left;">
+                    <div class="option-group">
+                        <label style="color: var(--text-muted); font-size: 0.9rem; font-weight: 500;">Target
+                            Language</label>
+                        <select id="target-lang" class="form-select">
+                            {% for code, name in languages.items() %}
+                            <option value="{{ code }}" {% if code=='en' %}selected{% endif %}>{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <button type="button" id="translate-btn" class="btn-premium" style="width: 100%; margin-top: 30px;">
+                        <span>🚀 Translate Now</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Processing State -->
+            <div id="status-msg" style="margin-top: 20px; display: none; text-align: center;">
+                <div style="color: var(--primary); font-size: 1.2rem; margin-bottom: 10px;">
+                    <span class="loading-dots">Translating your document</span>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">This may take a moment for larger files...</p>
+            </div>
+
+            <!-- Result Area -->
+            <div id="result-area"
+                style="display: none; margin-top: 30px; padding: 25px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 20px; text-align: center;">
+                <h3 style="color: #10b981; margin-bottom: 20px;">✅ Translation Complete!</h3>
+                <div style="display: flex; gap: 15px; justify-content: center; flex-direction: column;">
+                    <button id="preview-btn" class="btn-premium"
+                        style="background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); box-shadow: none;">
+                        👁️ Preview Translated Text
+                    </button>
+                    <a id="download-link" href="#" class="btn-premium">
+                        ⬇️ Download Translated File
+                    </a>
+                </div>
+            </div>
+
+            <div id="error-msg"
+                style="display: none; margin-top: 20px; padding: 15px; border-radius: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; text-align: center;">
             </div>
         </div>
-
-        <div id="translate-options" style="display: none; margin-top: 30px; text-align: left;">
-            <div class="option-group">
-                <label style="color: var(--text-muted); font-size: 0.9rem; font-weight: 500;">Target Language</label>
-                <select id="target-lang" class="form-select">
-                    {% for code, name in languages.items() %}
-                    <option value="{{ code }}" {% if code=='en' %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <button type="button" id="translate-btn" class="btn-premium" style="width: 100%; margin-top: 30px;">
-                <span>🚀 Translate Now</span>
-            </button>
-        </div>
     </div>
 
-    <!-- Processing State -->
-    <div id="status-msg" style="margin-top: 20px; display: none; text-align: center;">
-        <div style="color: var(--primary); font-size: 1.2rem; margin-bottom: 10px;">
-            <span class="loading-dots">Translating your document</span>
+    <!-- SIDE PREVIEW PANE -->
+    <div id="preview-pane" class="preview-pane" style="display: none;">
+        <div class="preview-header">
+            <h3>👁️ Translation Preview</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">First 10,000 characters</span>
         </div>
-        <p style="color: var(--text-muted); font-size: 0.9rem;">This may take a moment for larger files...</p>
-    </div>
-
-    <!-- Result Area -->
-    <div id="result-area"
-        style="display: none; margin-top: 30px; padding: 25px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 20px; text-align: center;">
-        <h3 style="color: #10b981; margin-bottom: 20px;">✅ Translation Complete!</h3>
-        <div style="display: flex; gap: 15px; justify-content: center;">
-            <button id="preview-btn" class="btn-premium"
-                style="background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border); box-shadow: none;">
-                👁️ Preview
-            </button>
-            <a id="download-link" href="#" class="btn-premium">
-                ⬇️ Download
-            </a>
-        </div>
-    </div>
-
-    <div id="error-msg"
-        style="display: none; margin-top: 20px; padding: 15px; border-radius: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; text-align: center;">
-    </div>
-</div>
-
-<!-- PREVIEW MODAL -->
-<div id="preview-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Document Preview</h3>
-            <button id="close-modal" class="btn-icon">✖</button>
-        </div>
-        <div class="modal-body">
-            <pre id="preview-text"></pre>
-        </div>
-        <div class="modal-footer">
-            <p style="font-size: 0.8rem; color: var(--text-muted);">Preview shows first 10,000 characters only.</p>
+        <div class="preview-content">
+            <pre id="preview-text-area"></pre>
         </div>
     </div>
 </div>
 
 <style>
+    .translator-container {
+        display: flex;
+        gap: 30px;
+        transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .translator-main {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .preview-pane {
+        flex: 1;
+        background: var(--card-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 24px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        animation: slideIn 0.5s ease;
+        max-height: 700px;
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateX(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .preview-header {
+        padding: 20px;
+        border-bottom: 1px solid var(--glass-border);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .preview-header h3 {
+        margin: 0;
+        color: var(--primary);
+        font-size: 1.2rem;
+    }
+
+    .preview-content {
+        padding: 20px;
+        overflow-y: auto;
+        background: #080808;
+    }
+
+    #preview-text-area {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-size: 0.9rem;
+        line-height: 1.6;
+        color: #f1f5f9;
+        margin: 0;
+        text-align: left;
+    }
+
     .loading-dots:after {
         content: '.';
         animation: dots 1.5s steps(5, end) infinite;
@@ -114,79 +180,19 @@
         }
     }
 
-    /* Modal Styling */
-    .modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.9);
-        backdrop-filter: blur(8px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-        opacity: 0;
-        transition: opacity 0.3s ease;
-        pointer-events: none;
+    /* Adjust container when preview is active */
+    .has-preview {
+        max-width: 1300px;
     }
 
-    .modal.show {
-        opacity: 1;
-        pointer-events: auto;
-    }
+    @media (max-width: 1000px) {
+        .translator-container.has-preview {
+            flex-direction: column;
+        }
 
-    .modal-content {
-        background: #111111;
-        width: 90%;
-        max-width: 700px;
-        max-height: 80vh;
-        border-radius: 24px;
-        border: 1px solid var(--glass-border);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    }
-
-    .modal-header {
-        padding: 20px 30px;
-        border-bottom: 1px solid var(--glass-border);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .modal-header h3 {
-        margin: 0;
-        color: var(--primary);
-    }
-
-    .modal-body {
-        padding: 30px;
-        overflow-y: auto;
-        color: #f1f5f9;
-        font-family: 'Inter', sans-serif;
-        line-height: 1.6;
-        text-align: left;
-    }
-
-    #preview-text {
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        font-size: 0.95rem;
-        margin: 0;
-    }
-
-    .modal-footer {
-        padding: 15px 30px;
-        border-top: 1px solid var(--glass-border);
-        background: rgba(0, 0, 0, 0.5);
-    }
-
-    .btn-icon:hover {
-        color: var(--primary);
+        .preview-pane {
+            max-height: 400px;
+        }
     }
 </style>
 
@@ -208,10 +214,10 @@
         const errorMsg = document.getElementById('error-msg');
         const targetLang = document.getElementById('target-lang');
 
-        // Modal elements
-        const modal = document.getElementById('preview-modal');
-        const closeModal = document.getElementById('close-modal');
-        const previewText = document.getElementById('preview-text');
+        // Preview pane elements
+        const container = document.querySelector('.translator-container');
+        const previewPane = document.getElementById('preview-pane');
+        const previewTextArea = document.getElementById('preview-text-area');
 
         let selectedFile = null;
         let lastResultFilename = null;
@@ -230,6 +236,10 @@
                 translateOptions.style.display = 'block';
                 errorMsg.style.display = 'none';
                 resultArea.style.display = 'none';
+
+                // Hide preview if active
+                container.classList.remove('has-preview');
+                previewPane.style.display = 'none';
             }
         };
 
@@ -240,6 +250,8 @@
             translateOptions.style.display = 'none';
             dropArea.style.display = 'block';
             resultArea.style.display = 'none';
+            container.classList.remove('has-preview');
+            previewPane.style.display = 'none';
         };
 
         translateBtn.onclick = async () => {
@@ -283,11 +295,11 @@
             }
         };
 
-        // Preview Logic
+        // Preview Logic - Side Pane
         previewBtn.onclick = async () => {
             if (!lastResultFilename) return;
 
-            previewBtn.textContent = '⌛ Loading...';
+            previewBtn.textContent = '⌛ Loading Preview...';
             previewBtn.disabled = true;
 
             try {
@@ -295,21 +307,19 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    previewText.textContent = data.content;
-                    modal.classList.add('show');
+                    previewTextArea.textContent = data.content;
+                    container.classList.add('has-preview');
+                    previewPane.style.display = 'flex';
                 } else {
                     alert('Preview error: ' + data.error);
                 }
             } catch (error) {
                 alert('Connection error for preview');
             } finally {
-                previewBtn.innerHTML = '👁️ Preview';
+                previewBtn.innerHTML = '👁️ Preview Translated Text';
                 previewBtn.disabled = false;
             }
         };
-
-        closeModal.onclick = () => modal.classList.remove('show');
-        window.onclick = (e) => { if (e.target === modal) modal.classList.remove('show'); };
     });
 </script>
 {% endblock %}
