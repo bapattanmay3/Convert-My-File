@@ -24,3 +24,4 @@ weasyprint>=60.0
 # Utility
 pdf2image>=1.16.3
 python-dotenv>=1.0.0
+deep-translator>=1.11.4

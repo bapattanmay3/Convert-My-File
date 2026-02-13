@@ -1,8 +1,9 @@
 import os
 import uuid
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, flash, redirect, url_for
 from werkzeug.utils import secure_filename
 from converter_universal import convert_pdf_to_docx, convert_image_to_pdf, convert_docx_to_pdf, convert_image_to_image
+from translator_engine import LANGUAGES, translate_file
 
 app = Flask(__name__)
 app.config['SITE_NAME'] = 'Convert My File'
@@ -20,8 +21,7 @@ def converter():
 
 @app.route('/translator')
 def translator():
-    # Placeholder for future implementation
-    return render_template('translator.html', site_name=app.config['SITE_NAME'])
+    return render_template('translator.html', site_name=app.config['SITE_NAME'], languages=LANGUAGES)
 
 @app.route('/merger')
 def merger():
@@ -114,6 +114,44 @@ def convert_image():
         })
     else:
         return jsonify({'success': False, 'error': message}), 500
+
+@app.route('/translate', methods=['POST'])
+def translate():
+    """Handle document translation"""
+    if 'file' not in request.files:
+        flash('No file uploaded')
+        return redirect(url_for('translator'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected')
+        return redirect(url_for('translator'))
+    
+    target_lang = request.form.get('target_lang', 'en')
+    
+    # Save uploaded file
+    filename = secure_filename(file.filename)
+    unique_id = str(uuid.uuid4())
+    input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
+    file.save(input_path)
+    
+    # Get extension
+    ext = os.path.splitext(filename)[1].lower().replace('.', '')
+    
+    # Generate output name
+    # For PDF, we translate to TXT for simplicity in this version
+    target_ext = 'txt' if ext == 'pdf' else ext
+    output_filename = f"translated_{unique_id}_{os.path.splitext(filename)[0]}.{target_ext}"
+    output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+    
+    # Translate
+    success, message = translate_file(input_path, output_path, ext, target_lang)
+    
+    if success and os.path.exists(output_path):
+        return send_from_directory(app.config['UPLOAD_FOLDER'], output_filename, as_attachment=True)
+    else:
+        flash(f'Translation failed: {message}')
+        return redirect(url_for('translator'))
 
 @app.route('/download/<filename>')
 def download_file(filename):
