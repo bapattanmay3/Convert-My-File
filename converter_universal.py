@@ -1,6 +1,7 @@
 """
 Universal File Converter Engine
 Supports: PDF, DOCX, XLSX, PPTX, CSV, JSON, TXT, HTML
+Optimized for deployment and memory efficiency.
 """
 
 import os
@@ -11,12 +12,75 @@ from datetime import datetime
 import xml.etree.ElementTree as ET
 from io import StringIO, BytesIO
 
+# ============ RENDER ENVIRONMENT CHECK ============
+ON_RENDER = os.environ.get('RENDER', False)
+
+# ============ LAZY LOADING HELPERS ============
+
+_pdf2docx = None
+def get_pdf2docx():
+    global _pdf2docx
+    if _pdf2docx is None:
+        from pdf2docx import Converter
+        _pdf2docx = Converter
+    return _pdf2docx
+
+_PyPDF2 = None
+def get_PyPDF2():
+    global _PyPDF2
+    if _PyPDF2 is None:
+        import PyPDF2
+        _PyPDF2 = PyPDF2
+    return _PyPDF2
+
+_tabula = None
+def get_tabula():
+    global _tabula
+    if _tabula is None:
+        import tabula
+        _tabula = tabula
+    return _tabula
+
+_pdfplumber = None
+def get_pdfplumber():
+    global _pdfplumber
+    if _pdfplumber is None:
+        import pdfplumber
+        _pdfplumber = pdfplumber
+    return _pdfplumber
+
+_weasyprint = None
+def get_weasyprint():
+    global _weasyprint
+    if _weasyprint is None:
+        from weasyprint import HTML
+        _weasyprint = HTML
+    return _weasyprint
+
+_docx = None
+def get_docx():
+    global _docx
+    if _docx is None:
+        from docx import Document
+        _docx = Document
+    return _docx
+
+_reportlab = None
+def get_reportlab():
+    global _reportlab
+    if _reportlab is None:
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.utils import simpleSplit
+        _reportlab = (canvas, letter, simpleSplit)
+    return _reportlab
+
 # ============ PDF CONVERSIONS ============
 
 def convert_pdf_to_docx(input_path, output_path):
     """PDF to Word Document"""
     try:
-        from pdf2docx import Converter
+        Converter = get_pdf2docx()
         cv = Converter(input_path)
         cv.convert(output_path)
         cv.close()
@@ -27,7 +91,7 @@ def convert_pdf_to_docx(input_path, output_path):
 def convert_pdf_to_txt(input_path, output_path):
     """PDF to Text"""
     try:
-        import PyPDF2
+        PyPDF2 = get_PyPDF2()
         with open(input_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
             text = ""
@@ -42,35 +106,39 @@ def convert_pdf_to_txt(input_path, output_path):
 def convert_pdf_to_xlsx(input_path, output_path):
     """PDF to Excel (extract tables)"""
     try:
-        # Try tabula-py first (Java-based, better for tables)
-        try:
-            import tabula
-            dfs = tabula.read_pdf(input_path, pages='all', multiple_tables=True)
-            if dfs:
-                with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                    for i, df in enumerate(dfs):
-                        sheet_name = f"Table_{i+1}" if len(dfs) > 1 else "Sheet1"
-                        df.to_excel(writer, sheet_name=sheet_name, index=False)
-                return True, "PDF to XLSX conversion successful (tables extracted)"
-        except:
-            # Fallback to pdfplumber
-            import pdfplumber
-            with pdfplumber.open(input_path) as pdf:
-                all_tables = []
-                for page in pdf.pages:
-                    tables = page.extract_tables()
+        # On Render, skip tabula-py (requires Java)
+        if not ON_RENDER:
+            try:
+                tabula = get_tabula()
+                dfs = tabula.read_pdf(input_path, pages='all', multiple_tables=True)
+                if dfs:
+                    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                        for i, df in enumerate(dfs):
+                            sheet_name = f"Table_{i+1}" if len(dfs) > 1 else "Sheet1"
+                            df.to_excel(writer, sheet_name=sheet_name, index=False)
+                    return True, "PDF to XLSX conversion successful (tables extracted via Tabula)"
+            except Exception as tabula_err:
+                print(f"Tabula extraction failed, falling back to pdfplumber: {tabula_err}")
+
+        # Fallback/Default: pdfplumber
+        pdfplumber = get_pdfplumber()
+        with pdfplumber.open(input_path) as pdf:
+            all_tables = []
+            for page in pdf.pages:
+                tables = page.extract_tables()
+                if tables:
                     for table in tables:
                         df = pd.DataFrame(table)
                         all_tables.append(df)
-                
-                if all_tables:
-                    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                        for i, df in enumerate(all_tables):
-                            sheet_name = f"Table_{i+1}" if len(all_tables) > 1 else "Sheet1"
-                            df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
-                    return True, "PDF to XLSX conversion successful"
-                else:
-                    return False, "No tables found in PDF"
+            
+            if all_tables:
+                with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                    for i, df in enumerate(all_tables):
+                        sheet_name = f"Table_{i+1}" if len(all_tables) > 1 else "Sheet1"
+                        df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+                return True, "PDF to XLSX conversion successful (tables extracted via pdfplumber)"
+            else:
+                return False, "No tables found in PDF"
     except Exception as e:
         return False, str(e)
 
@@ -119,7 +187,7 @@ def convert_xlsx_to_pdf(input_path, output_path):
         df = pd.read_excel(input_path)
         html = df.to_html(index=False)
         
-        from weasyprint import HTML
+        HTML = get_weasyprint()
         HTML(string=f"<html><body>{html}</body></html>").write_pdf(output_path)
         return True, "XLSX to PDF conversion successful"
     except Exception as e:
@@ -257,7 +325,10 @@ def convert_json_to_xml(input_path, output_path):
 def convert_pptx_to_pdf(input_path, output_path):
     """PowerPoint to PDF"""
     try:
-        # Method 1: Spire.Presentation (commercial, but has free tier) [citation:4]
+        if ON_RENDER:
+            return False, "PPTX to PDF not available on Render free tier (requires system utilities)"
+
+        # Method 1: Spire.Presentation
         try:
             from spire.presentation import Presentation, FileFormat
             presentation = Presentation()
@@ -266,7 +337,7 @@ def convert_pptx_to_pdf(input_path, output_path):
             presentation.Dispose()
             return True, "PPTX to PDF conversion successful (Spire)"
         except:
-            # Method 2: polytext + LibreOffice (free) [citation:10]
+            # Method 2: polytext + LibreOffice
             try:
                 from polytext import convert_to_pdf
                 convert_to_pdf(input_path, output_path)
@@ -280,8 +351,6 @@ def convert_pptx_to_images(input_path, output_dir):
     """PowerPoint to Images"""
     try:
         from spire.presentation import Presentation
-        import os
-        
         presentation = Presentation()
         presentation.LoadFromFile(input_path)
         
@@ -304,7 +373,6 @@ def convert_pptx_to_txt(input_path, output_path):
     """PowerPoint to Text (extract content)"""
     try:
         from spire.presentation import Presentation
-        
         presentation = Presentation()
         presentation.LoadFromFile(input_path)
         
@@ -340,12 +408,14 @@ def convert_docx_to_pdf(input_path, output_path):
             convert(input_path, output_path)
             return True, "DOCX to PDF conversion successful"
         except:
-            # Fallback to polytext + LibreOffice [citation:10]
+            # Fallback to polytext + LibreOffice
             try:
                 from polytext import convert_to_pdf
                 convert_to_pdf(input_path, output_path)
                 return True, "DOCX to PDF conversion successful (LibreOffice)"
             except:
+                if ON_RENDER:
+                    return False, "DOCX to PDF requires LibreOffice on Render (not found)"
                 return False, "DOCX to PDF conversion failed: No compatible converter found"
     except Exception as e:
         return False, str(e)
@@ -353,7 +423,7 @@ def convert_docx_to_pdf(input_path, output_path):
 def convert_docx_to_txt(input_path, output_path):
     """Word to Text"""
     try:
-        from docx import Document
+        Document = get_docx()
         doc = Document(input_path)
         text = "\n".join([para.text for para in doc.paragraphs])
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -365,8 +435,7 @@ def convert_docx_to_txt(input_path, output_path):
 def convert_docx_to_html(input_path, output_path):
     """Word to HTML"""
     try:
-        from docx import Document
-        
+        Document = get_docx()
         doc = Document(input_path)
         html_content = ["<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Document</title></head><body>"]
         
@@ -397,10 +466,7 @@ def convert_docx_to_html(input_path, output_path):
 def convert_txt_to_pdf(input_path, output_path):
     """Text to PDF"""
     try:
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.utils import simpleSplit
-        
+        canvas, letter, simpleSplit = get_reportlab()
         c = canvas.Canvas(output_path, pagesize=letter)
         width, height = letter
         
@@ -430,8 +496,7 @@ def convert_txt_to_pdf(input_path, output_path):
 def convert_txt_to_docx(input_path, output_path):
     """Text to Word"""
     try:
-        from docx import Document
-        
+        Document = get_docx()
         doc = Document()
         with open(input_path, 'r', encoding='utf-8') as f:
             content = f.read()
