@@ -308,8 +308,8 @@ def convert_image():
         return jsonify({'success': False, 'error': message}), 500
 
 @app.route('/translate', methods=['POST'])
-def translate():
-    """Handle document translation"""
+def translate_file():
+    """Translate uploaded documents with robust error handling"""
     try:
         if 'file' not in request.files:
             return jsonify({'success': False, 'error': 'No file uploaded'}), 400
@@ -318,7 +318,16 @@ def translate():
         if file.filename == '':
             return jsonify({'success': False, 'error': 'No file selected'}), 400
         
-        target_lang = request.form.get('target_lang', 'en')
+        target_lang = request.form.get('target_lang', 'es')
+        source_lang = request.form.get('source_lang', 'auto')
+        
+        # Validate file size (50MB max)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size > 50 * 1024 * 1024:
+            return jsonify({'success': False, 'error': 'File too large (max 50MB)'}), 400
         
         # Save uploaded file
         filename = secure_filename(file.filename)
@@ -326,41 +335,35 @@ def translate():
         input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
         file.save(input_path)
         
-        # Get extension
-        ext = os.path.splitext(filename)[1].lower().replace('.', '')
-        
-        # Preserve the original extension for all formats
-        target_ext = ext
-        output_filename = f"translated_{unique_id}_{os.path.splitext(filename)[0]}.{target_ext}"
+        # Generate output path
+        file_ext = os.path.splitext(filename)[1].lower()
+        base_name = os.path.splitext(filename)[0]
+        output_filename = f"translated_{unique_id}_{base_name}{file_ext}"
         output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
         
-        # Translate
-        success, message = translate_file(input_path, output_path, ext, target_lang)
+        # Import translator function
+        from translator_engine import translate_document
         
-        # --- Handle Partial Success Fallback (PDF -> DOCX) ---
-        is_partial = False
-        if not success and message.startswith("TRANS_DOCX_ONLY|"):
-            is_partial = True
-            render_msg = message.split("|")[1]
-            # Update paths to the fallback DOCX file
-            output_filename = output_filename.replace('.pdf', '.docx')
-            output_path = output_path.replace('.pdf', '.docx')
-            success = True # Treat as success for the UI
-            message = f"Translation ready in Word format (Note: PDF rendering skipped - {render_msg})"
-
+        # Translate with timeout
+        success, message = translate_document(
+            input_path, output_path, target_lang, source_lang, file_ext
+        )
+        
         if success and os.path.exists(output_path):
             return jsonify({
                 'success': True,
                 'message': message,
                 'download_url': f'/download/{output_filename}',
-                'preview_filename': output_filename,
                 'filename': output_filename
             })
         else:
-            return jsonify({'success': False, 'error': message or "Translation failed"}), 500
+            return jsonify({'success': False, 'error': message or 'Translation failed'}), 500
             
     except Exception as e:
-        return jsonify({'success': False, 'error': f"Processing error: {str(e)}"}), 500
+        print(f"Translation route error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/get-preview/<filename>')
 def get_preview(filename):

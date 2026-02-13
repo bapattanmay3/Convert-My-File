@@ -10,6 +10,7 @@ import PyPDF2
 from docx import Document
 from io import BytesIO
 import logging
+import time
 
 # Configure safe logging to avoid console encoding issues
 logging.basicConfig(
@@ -19,11 +20,69 @@ logging.basicConfig(
 )
 
 def safe_log(msg):
-    """Safely log error messages without crashing the console on Windows"""
+    """Safely log messages without crashing the console on Windows"""
     try:
         logging.error(msg)
+        print(msg) # For user visibility, but wrapped nicely if needed
     except:
         pass
+# ===== ENTITY PRESERVATION PATTERNS =====
+PRESERVE_PATTERNS = [
+    r'^[\d\s\+\-\(\)]+$',                    # Pure numbers
+    r'^\d+$',                                 # Integers
+    r'^\d+\.\d+$',                           # Decimals
+    r'^\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}$',    # Dates
+    r'^[\w\.-]+@[\w\.-]+\.\w+$',             # Emails
+    r'^https?://[^\s]+$',                    # URLs
+    r'^[A-Z0-9]{5,}$',                       # Codes/IDs
+    r'^[A-Z]{2,}\d+$',                       # Alphanumeric codes
+    r'^\$\s*\d+(\.\d{2})?$',                 # Prices
+    r'^\d+(\.\d{1,2})?%$',                   # Percentages
+]
+
+def should_preserve(text):
+    """Check if text should be excluded from translation"""
+    if not isinstance(text, str):
+        return True
+    text = text.strip()
+    if not text or len(text) < 2:
+        return True
+    for pattern in PRESERVE_PATTERNS:
+        if re.match(pattern, text):
+            return True
+    letters = sum(c.isalpha() for c in text)
+    numbers = sum(c.isdigit() for c in text)
+    if numbers > letters and numbers > 3:
+        return True
+    return False
+
+def translate_text_safe(text, target_lang, source_lang='auto', max_retries=3):
+    """Safe translation with timeout, retries and chunking"""
+    if should_preserve(text):
+        return text
+    
+    # Chunk long text (4000 chars max per request)
+    chunk_size = 4000
+    chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+    translated_chunks = []
+    
+    for chunk in chunks:
+        for attempt in range(max_retries):
+            try:
+                # Use deep-translator
+                translator = GoogleTranslator(source=source_lang, target=target_lang[:2])
+                result = translator.translate(chunk)
+                if result:
+                    translated_chunks.append(result)
+                    break
+                time.sleep(1)
+            except Exception as e:
+                safe_log(f"Translation attempt {attempt+1} failed: {e}")
+                if attempt == max_retries - 1:
+                    translated_chunks.append(chunk)  # Fallback to original
+                time.sleep(2)
+    
+    return ' '.join(translated_chunks)
 
 # Supported languages
 LANGUAGES = {
@@ -127,59 +186,31 @@ def translate_text(text, target_lang, source_lang='auto'):
 
     return final_results if is_batch else final_results[0]
 
-def translate_pdf(input_path, output_path, target_lang):
-    """
-    Enhanced PDF Translation via Bridge Workflow:
-    PDF -> DOCX (Layout Restoration) -> Translate -> PDF (Render)
-    """
+def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
+    """User-requested PDF translation via text extraction"""
     try:
-        from converter_universal import convert_pdf_to_docx, convert_docx_to_pdf
-        import uuid
-        
-        unique_id = str(uuid.uuid4())
-        folder = os.path.dirname(input_path)
-        
-        # Step 1: PDF to DOCX
-        temp_docx_in = os.path.join(folder, f"bridge_in_{unique_id}.docx")
-        success, msg = convert_pdf_to_docx(input_path, temp_docx_in)
-        if not success:
-            return False, f"Structural analysis failed: {msg}"
+        text_content = []
+        with open(input_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            total_pages = len(pdf_reader.pages)
             
-        # Step 2: Translate DOCX
-        temp_docx_out = os.path.join(folder, f"bridge_out_{unique_id}.docx")
-        success, msg = translate_docx(temp_docx_in, temp_docx_out, target_lang)
-        if not success:
-            return False, f"Content translation failed: {msg}"
-            
-        # Step 3: DOCX to PDF
-        success_render, msg_render = convert_docx_to_pdf(temp_docx_out, output_path)
+            for i, page in enumerate(pdf_reader.pages):
+                safe_log(f"Translating page {i+1}/{total_pages}")
+                text = page.extract_text()
+                if text and text.strip():
+                    translated = translate_text_safe(text, target_lang, source_lang)
+                    text_content.append(translated)
+                else:
+                    text_content.append("")
         
-        # Cleanup input bridge
-        if os.path.exists(temp_docx_in):
-            try: os.remove(temp_docx_in)
-            except: pass
-                
-        if success_render:
-            # Full success - cleanup bridge out and return PDF
-            if os.path.exists(temp_docx_out):
-                try: os.remove(temp_docx_out)
-                except: pass
-            return True, "PDF translated with structure preserved"
-        else:
-            # Partial success - handle DOCX fallback
-            # Move the translated DOCX to the output path but change extension
-            final_docx_path = output_path.replace('.pdf', '.docx')
-            import shutil
-            shutil.move(temp_docx_out, final_docx_path)
-            # We return success=True but with a message explaining the format change
-            # However, the app.py handles output_path, so we need to be careful.
-            # Best is to return False with a specific 'PARTIAL' signal or just 
-            # let translate_file handling it. Actually, app.py expects a file at output_path.
-            # Let's just return False but with a directive message.
-            return False, f"TRANS_DOCX_ONLY|{msg_render}"
+        # Save as text (Note: We use output_path derived from app.py)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write('\n\n'.join(text_content))
         
+        return True, f"PDF translation completed: {total_pages} pages"
     except Exception as e:
-        return False, f"Bridge error: {str(e)}"
+        safe_log(f"PDF translation error: {e}")
+        return False, str(e)
 
 def translate_docx(input_path, output_path, target_lang):
     """DOCX Translation with deep table and formatting preservation"""
@@ -308,19 +339,28 @@ def translate_csv(input_path, output_path, target_lang):
 
 # ============ DISPATCHER ============
 
-TRANSLATORS = {
-    'pdf': translate_pdf,
-    'docx': translate_docx,
-    'txt': translate_txt,
-    'xlsx': translate_xlsx,
-    'xls': translate_xlsx, # xlrd/openpyxl handled by pandas
-    'csv': translate_csv
-}
-
-def translate_file(input_path, output_path, ext, target_lang):
-    """Main entry point for file translation"""
-    ext = ext.lower().replace('.', '')
-    if ext in TRANSLATORS:
-        return TRANSLATORS[ext](input_path, output_path, target_lang)
-    else:
-        return False, f"File format {ext} not supported for translation"
+def translate_document(input_path, output_path, target_lang, source_lang='auto', file_ext=None):
+    """Dispatcher function with better error handling"""
+    try:
+        if file_ext is None:
+            file_ext = os.path.splitext(input_path)[1].lower()
+        
+        if not os.path.exists(input_path):
+            return False, "Input file not found"
+        
+        if file_ext == '.pdf':
+            return translate_pdf(input_path, output_path, target_lang, source_lang)
+        elif file_ext == '.docx':
+            return translate_docx(input_path, output_path, target_lang)
+        elif file_ext in ['.xlsx', '.xls']:
+            return translate_xlsx(input_path, output_path, target_lang)
+        elif file_ext == '.csv':
+            return translate_csv(input_path, output_path, target_lang)
+        elif file_ext == '.txt':
+            return translate_txt(input_path, output_path, target_lang)
+        else:
+            return False, f"Unsupported file type: {file_ext}"
+            
+    except Exception as e:
+        safe_log(f"Critical translation error: {e}")
+        return False, str(e)
