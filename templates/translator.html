@@ -282,14 +282,17 @@
                     downloadLink.href = data.download_url;
                     resultArea.style.display = 'block';
                 } else {
-                    errorMsg.textContent = '❌ ' + (data.error || 'Translation failed');
+                    errorMsg.innerHTML = `❌ <b>Translation Error:</b> ${data.error || 'Unknown failure'}<br><small style="opacity: 0.7">Status: ${response.status} ${response.statusText}</small>`;
                     errorMsg.style.display = 'block';
                     fileInfo.style.display = 'block';
                     translateOptions.style.display = 'block';
                 }
             } catch (error) {
                 statusMsg.style.display = 'none';
-                errorMsg.textContent = '❌ Network error. Please try again.';
+                let diagnosticInfo = error.message || 'Check browser console';
+                if (error.name === 'AbortError') diagnosticInfo = 'Request timed out';
+
+                errorMsg.innerHTML = `❌ <b>Network error.</b> Please try again.<br><small style="opacity: 0.7">Details: ${diagnosticInfo}</small>`;
                 errorMsg.style.display = 'block';
                 fileInfo.style.display = 'block';
                 translateOptions.style.display = 'block';

@@ -9,6 +9,21 @@ from deep_translator import GoogleTranslator
 import PyPDF2
 from docx import Document
 from io import BytesIO
+import logging
+
+# Configure safe logging to avoid console encoding issues
+logging.basicConfig(
+    filename='translator.log',
+    level=logging.ERROR,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+def safe_log(msg):
+    """Safely log error messages without crashing the console on Windows"""
+    try:
+        logging.error(msg)
+    except:
+        pass
 
 # Supported languages
 LANGUAGES = {
@@ -37,88 +52,64 @@ import re
 
 def translate_text(text, target_lang, source_lang='auto'):
     """
-    Translates text with entity preservation (names/numbers).
-    Uses placeholders to protect specific entities from the translation engine.
+    Translates text (or list of texts) with entity preservation.
+    Native support for batch processing.
     """
-    if not text.strip():
-        return ""
+    if not text:
+        return "" if isinstance(text, str) else []
         
-    # --- PHASE 1: MASKING ---
-    # Patterns to protect: 
-    # 1. Numbers (including decimals and commas)
-    # 2. Capitalized words (likely names/brands), excluding start of sentences if possible
-    # We use a broad regex for numbers and a heuristic for names.
-    
-    # Identify unique entities
-    entities = []
-    
-    # Protect numbers: e.g. 100, 10.5, 1,000, 2024
-    num_pattern = r'\b\d+(?:[.,]\d+)*\b'
-    # Protect capitalized words that aren't entirely uppercase (to avoid acronyms which might need translation)
-    # This is a heuristic for names/proper nouns.
-    name_pattern = r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b'
-    
-    # Common words that shouldn't be masked even if capitalized (heuristic)
-    EXCLUSIONS = {'The', 'My', 'This', 'A', 'An', 'Our', 'Your', 'Their', 'His', 'Her', 'It', 'There', 'Where', 'When', 'Who', 'How', 'That', 'These', 'Those'}
-    
-    def mask_entities(match):
-        val = match.group(0)
-        # Avoid masking common starters if they are at the beginning of a block
-        if val in EXCLUSIONS:
-            return val
-            
-        if val not in entities:
-            entities.append(val)
-        idx = entities.index(val)
-        return f"[[P_{idx}]]"
+    is_batch = isinstance(text, list)
+    text_list = text if is_batch else [text]
+    results = []
 
-    # Mask numbers first (very reliable)
-    masked_text = re.sub(num_pattern, mask_entities, text)
-    # Mask names/proper nouns (heuristic: Capitalized words)
-    masked_text = re.sub(name_pattern, mask_entities, masked_text)
-
-    # --- PHASE 2: TRANSLATION ---
     try:
         translator = GoogleTranslator(source=source_lang, target=target_lang)
         
-        # Split text into chunks of 4500 characters
-        chunk_size = 4500
-        chunks = [masked_text[i:i+chunk_size] for i in range(0, len(masked_text), chunk_size)]
-        
-        translated_chunks = []
-        for chunk in chunks:
-            try:
-                result = translator.translate(chunk)
-                # NoneType Safety: If result is None, fallback to original chunk
-                translated_chunks.append(result if result is not None else chunk)
-            except Exception as e:
-                print(f"Translation chunk error: {e}")
-                translated_chunks.append(chunk)
-                
-        translated_text = "".join(translated_chunks)
-    except Exception as e:
-        print(f"Translator setup error: {e}")
-        translated_text = masked_text
+        for original_item in text_list:
+            if not original_item.strip():
+                results.append(original_item)
+                continue
 
-    # --- PHASE 3: UNMASKING ---
-    if not translated_text:
+            # --- PHASE 1: MASKING ---
+            entities = []
+            num_pattern = r'\b\d+(?:[.,]\d+)*\b'
+            name_pattern = r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b'
+            EXCLUSIONS = {'The', 'My', 'This', 'A', 'An', 'Our', 'Your', 'Their', 'His', 'Her', 'It', 'There', 'Where', 'When', 'Who', 'How', 'That', 'These', 'Those'}
+            
+            def mask_entities(match):
+                val = match.group(0)
+                if val in EXCLUSIONS: return val
+                if val not in entities: entities.append(val)
+                return f"[[P_{entities.index(val)}]]"
+
+            masked_item = re.sub(num_pattern, mask_entities, original_item)
+            masked_item = re.sub(name_pattern, mask_entities, masked_item)
+
+            # --- PHASE 2: TRANSLATION ---
+            try:
+                # Use native translate for single items within the list loop logic
+                # For ultra-performance we could use translate_batch on the MASKED list
+                # but masking is per-item, so we'll do this safely.
+                translated_item = translator.translate(masked_item)
+                if translated_item is None: translated_item = masked_item
+                
+                # --- PHASE 3: UNMASKING ---
+                for idx, original_val in enumerate(entities):
+                    placeholder = f"[[P_{idx}]]"
+                    translated_item = translated_item.replace(placeholder, original_val)
+                    translated_item = translated_item.replace(f"[[p_{idx}]]", original_val)
+                    translated_item = translated_item.replace(f"[P_{idx}]", original_val)
+                
+                results.append(translated_item)
+            except Exception as e:
+                safe_log(f"Batch item error: {str(e)}")
+                results.append(original_item)
+
+    except Exception as e:
+        safe_log(f"Translator error: {str(e)}")
         return text
 
-    # Restore the original entities
-    for idx, original_val in enumerate(entities):
-        placeholder = f"[[P_{idx}]]"
-        # Safety: Ensure translated_text is still a string
-        if not isinstance(translated_text, str):
-            break
-            
-        # Some translators might remove brackets or change casing of placeholders, 
-        # so we do a few common variations just in case.
-        translated_text = translated_text.replace(placeholder, original_val)
-        # Fallbacks for minor engine mutations
-        translated_text = translated_text.replace(f"[[p_{idx}]]", original_val)
-        translated_text = translated_text.replace(f"[P_{idx}]", original_val)
-        
-    return translated_text
+    return results if is_batch else results[0]
 
 def translate_pdf(input_path, output_path, target_lang):
     """
@@ -187,28 +178,18 @@ def translate_docx(input_path, output_path, target_lang):
         
         def process_batch(text_list, para_list):
             if not text_list: return
-            # Join with newline for batch translation
-            joined_text = "\n".join(text_list)
-            translated_joined = translate_text(joined_text, target_lang)
-            translated_lines = translated_joined.split("\n")
+            translated_list = translate_text(text_list, target_lang)
             
-            # If line counts match, assign back. Otherwise, fallback to one-by-one.
-            if len(translated_lines) == len(para_list):
-                for i, para in enumerate(para_list):
-                    para.text = translated_lines[i]
-            else:
-                # Fallback: Translate individually for this batch
-                for para in para_list:
-                    para.text = translate_text(para.text, target_lang)
+            # Map back to paragraphs
+            for i, para in enumerate(para_list):
+                para.text = translated_list[i]
 
         for para in doc.paragraphs:
             if para.text.strip():
                 p_text = para.text
-                if current_batch_len + len(p_text) > 4000:
+                if current_batch_len + len(p_text) > 2000: # Smaller batches for higher reliability
                     process_batch(batch_text, batch_paras)
-                    batch_text = []
-                    batch_paras = []
-                    current_batch_len = 0
+                    batch_text, batch_paras, current_batch_len = [], [], 0
                 
                 batch_text.append(p_text)
                 batch_paras.append(para)
