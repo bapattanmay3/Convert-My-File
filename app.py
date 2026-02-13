@@ -160,31 +160,42 @@ def compress():
             
             current_size = final_buf.tell()
             
-            # --- Lever 2: Dynamic Scaling (Dimension Adjustment) ---
-            # If we are far from target (more than 10% off), we adjust dimensions
-            if abs(current_size - target_bytes) / target_bytes > 0.1:
-                # Calculate required area ratio
-                # Size is roughly proportional to area (Width * Height)
-                ratio = (target_bytes / current_size) ** 0.5
+            # --- Lever 2: Precision Convergence Loop (v3.0) ---
+            # We iteratively recalibrate dimensions based on actual size feedback
+            current_scale = 1.0
+            tolerance = 0.05 # 5% error margin
+            working_img = orig_img
+            
+            for attempt in range(5):
+                # Calculate dimensions for this pass
+                temp_w = max(1, int(orig_img.width * current_scale))
+                temp_h = max(1, int(orig_img.height * current_scale))
                 
-                # Limit scaling to avoid extreme corruption (max 4x area expansion, min 0.1x)
-                ratio = max(0.1, min(4.0, ratio))
+                # Resize from ORIGINAL to avoid compound blur
+                working_img = orig_img.resize((temp_w, temp_h), Image.Resampling.LANCZOS)
+                if working_img.mode != 'RGB' and orig_format == 'JPEG':
+                    working_img = working_img.convert('RGB')
                 
-                new_size = (int(orig_img.width * ratio), int(orig_img.height * ratio))
-                if new_size[0] > 0 and new_size[1] > 0:
-                    scaled_img = orig_img.resize(new_size, Image.Resampling.LANCZOS)
-                    
-                    # Final pass with scaled image
-                    if scaled_img.mode != 'RGB' and orig_format == 'JPEG':
-                        scaled_img = scaled_img.convert('RGB')
-                    scaled_img.save(output_path, **test_params)
-                    success, message = True, f"Precisely calibrated to target size via scaling"
-                else:
-                    temp_img.save(output_path, **test_params)
-                    success, message = True, f"Optimized to {best_q}% quality"
-            else:
-                temp_img.save(output_path, **test_params)
-                success, message = True, f"Matched target size at {best_q}% quality"
+                # Check output size
+                buf = io.BytesIO()
+                working_img.save(buf, **test_params)
+                current_size = buf.tell()
+                
+                # Are we close enough?
+                if abs(current_size - target_bytes) / target_bytes <= tolerance:
+                    break
+                
+                # Recalculate scale based on actual size result
+                # Ratio is sqrt(Target/Actual) because size is area-proportional
+                scale_adjustment = (target_bytes / current_size) ** 0.5
+                current_scale *= scale_adjustment
+                
+                # Safety boundaries (0.1x to 4.0x original)
+                current_scale = max(0.05, min(8.0, current_scale))
+
+            # Final Save
+            working_img.save(output_path, **test_params)
+            success, message = True, f"Precision calibrated ({unit}) after {attempt+1} passes"
             
         elif ext == 'pdf':
             # PDF compression is less granular with PyPDF2
