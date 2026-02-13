@@ -162,12 +162,58 @@ def translate_txt(input_path, output_path, target_lang):
     except Exception as e:
         return False, str(e)
 
+def translate_xlsx(input_path, output_path, target_lang):
+    """Excel to Translated Excel (Multi-sheet)"""
+    try:
+        import pandas as pd
+        # Read all sheets
+        all_sheets = pd.read_excel(input_path, sheet_name=None)
+        
+        def cell_translator(val):
+            if isinstance(val, str) and val.strip():
+                return translate_text(val, target_lang)
+            return val
+            
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            for sheet_name, df in all_sheets.items():
+                # Element-wise translation
+                # Use applymap for older pandas or map for newer, but apply works across columns
+                for col in df.columns:
+                    df[col] = df[col].apply(cell_translator)
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
+                
+        return True, "Excel file translated successfully"
+    except Exception as e:
+        return False, str(e)
+
+def translate_csv(input_path, output_path, target_lang):
+    """CSV to Translated CSV"""
+    try:
+        import pandas as pd
+        df = pd.read_csv(input_path)
+        
+        def cell_translator(val):
+            if isinstance(val, str) and val.strip():
+                return translate_text(val, target_lang)
+            return val
+            
+        for col in df.columns:
+            df[col] = df[col].apply(cell_translator)
+            
+        df.to_csv(output_path, index=False)
+        return True, "CSV file translated successfully"
+    except Exception as e:
+        return False, str(e)
+
 # ============ DISPATCHER ============
 
 TRANSLATORS = {
     'pdf': translate_pdf,
     'docx': translate_docx,
-    'txt': translate_txt
+    'txt': translate_txt,
+    'xlsx': translate_xlsx,
+    'xls': translate_xlsx, # xlrd/openpyxl handled by pandas
+    'csv': translate_csv
 }
 
 def translate_file(input_path, output_path, ext, target_lang):

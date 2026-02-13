@@ -11,8 +11,9 @@
                     <span class="upload-icon">📄</span>
                     <div class="btn-premium" style="padding: 10px 25px; margin-bottom: 10px;" id="browse-btn">Select
                         Document</div>
-                    <p style="color: var(--text-muted);">PDF, DOCX, or TXT</p>
-                    <input id="file-upload" name="file" type="file" accept=".pdf,.docx,.txt" hidden />
+                    <p style="color: var(--text-muted);">PDF, DOCX, XLSX, XLS, CSV or TXT</p>
+                    <input id="file-upload" name="file" type="file" accept=".pdf,.docx,.txt,.xlsx,.xls,.csv"
+                        onchange="handleFileSelect(this)" hidden />
                 </div>
 
                 <div id="file-info" class="file-info" style="display: none;">

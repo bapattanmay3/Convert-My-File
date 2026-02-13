@@ -299,6 +299,7 @@ def translate():
     
     # Generate output name
     # For PDF, we translate to TXT for simplicity in this version
+    # For others (DOCX, XLSX, XLS, CSV, TXT), we preserve the extension
     target_ext = 'txt' if ext == 'pdf' else ext
     output_filename = f"translated_{unique_id}_{os.path.splitext(filename)[0]}.{target_ext}"
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
