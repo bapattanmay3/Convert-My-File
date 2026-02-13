@@ -106,7 +106,8 @@
                 <div class="option-group">
                     <label>Convert to:</label>
                     <select id="imageFormatSelect" class="form-select">
-                        <option value="jpg">JPEG Image (.jpg)</option>
+                        <option value="jpg">JPG Image (.jpg)</option>
+                        <option value="jpeg">JPEG Image (.jpeg)</option>
                         <option value="png">PNG Image (.png)</option>
                         <option value="webp">WebP Image (.webp)</option>
                         <option value="pdf">PDF Document (.pdf)</option>
@@ -431,14 +432,26 @@
 
                 // Filter format options (can't convert to same format)
                 const ext = imageSelectedFile.name.split('.').pop().toLowerCase();
+                const isJpegCase = (ext === 'jpg' || ext === 'jpeg' || ext === 'jfif');
+
                 Array.from(imageFormatSelect.options).forEach(opt => {
-                    if (ext === opt.value || (ext === 'jpg' && opt.value === 'jpeg') ||
-                        (ext === 'jpeg' && opt.value === 'jpg')) {
+                    const optVal = opt.value;
+                    const isOptJpeg = (optVal === 'jpg' || optVal === 'jpeg');
+
+                    if (ext === optVal || (isJpegCase && isOptJpeg)) {
                         opt.style.display = 'none';
                     } else {
                         opt.style.display = 'block';
                     }
                 });
+
+                // Reset selection to first visible option
+                for (let opt of imageFormatSelect.options) {
+                    if (opt.style.display !== 'none') {
+                        imageFormatSelect.value = opt.value;
+                        break;
+                    }
+                }
             }
         };
 

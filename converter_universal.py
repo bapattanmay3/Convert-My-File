@@ -631,8 +631,8 @@ IMAGE_CONVERSIONS = {
     'jpeg': ['png', 'webp', 'pdf', 'jpg'],
     'png': ['jpg', 'webp', 'pdf', 'jpeg'],
     'webp': ['jpg', 'png', 'pdf', 'jpeg'],
-    'gif': ['png', 'jpg', 'webp', 'pdf'],
-    'bmp': ['png', 'jpg', 'webp', 'pdf']
+    'gif': ['png', 'jpg', 'webp', 'pdf', 'jpeg'],
+    'bmp': ['png', 'jpg', 'webp', 'pdf', 'jpeg']
 }
 
 SUPPORTED_IMAGE_INPUTS = list(IMAGE_CONVERSIONS.keys())
