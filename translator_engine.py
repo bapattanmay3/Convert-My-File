@@ -33,26 +33,80 @@ LANGUAGES = {
     'yi': 'Yiddish', 'yo': 'Yoruba', 'zu': 'Zulu'
 }
 
+import re
+
 def translate_text(text, target_lang, source_lang='auto'):
-    """Translates text in chunks to avoid API limits (approx 5000 chars)"""
+    """
+    Translates text with entity preservation (names/numbers).
+    Uses placeholders to protect specific entities from the translation engine.
+    """
     if not text.strip():
         return ""
         
+    # --- PHASE 1: MASKING ---
+    # Patterns to protect: 
+    # 1. Numbers (including decimals and commas)
+    # 2. Capitalized words (likely names/brands), excluding start of sentences if possible
+    # We use a broad regex for numbers and a heuristic for names.
+    
+    # Identify unique entities
+    entities = []
+    
+    # Protect numbers: e.g. 100, 10.5, 1,000, 2024
+    num_pattern = r'\b\d+(?:[.,]\d+)*\b'
+    # Protect capitalized words that aren't entirely uppercase (to avoid acronyms which might need translation)
+    # This is a heuristic for names/proper nouns.
+    name_pattern = r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b'
+    
+    # Common words that shouldn't be masked even if capitalized (heuristic)
+    EXCLUSIONS = {'The', 'My', 'This', 'A', 'An', 'Our', 'Your', 'Their', 'His', 'Her', 'It', 'There', 'Where', 'When', 'Who', 'How', 'That', 'These', 'Those'}
+    
+    def mask_entities(match):
+        val = match.group(0)
+        # Avoid masking common starters if they are at the beginning of a block
+        if val in EXCLUSIONS:
+            return val
+            
+        if val not in entities:
+            entities.append(val)
+        idx = entities.index(val)
+        return f"[[P_{idx}]]"
+
+    # Mask numbers first (very reliable)
+    masked_text = re.sub(num_pattern, mask_entities, text)
+    # Mask names/proper nouns (heuristic: Capitalized words)
+    masked_text = re.sub(name_pattern, mask_entities, masked_text)
+
+    # --- PHASE 2: TRANSLATION ---
     translator = GoogleTranslator(source=source_lang, target=target_lang)
     
     # Split text into chunks of 4500 characters
     chunk_size = 4500
-    chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+    chunks = [masked_text[i:i+chunk_size] for i in range(0, len(masked_text), chunk_size)]
     
     translated_chunks = []
     for chunk in chunks:
         try:
+            # Google Translate handles [[P_0]] style placeholders well (usually ignores them)
             translated_chunks.append(translator.translate(chunk))
         except Exception as e:
             print(f"Translation chunk error: {e}")
-            translated_chunks.append(chunk) # Fallback to original
+            translated_chunks.append(chunk)
             
-    return "".join(translated_chunks)
+    translated_text = "".join(translated_chunks)
+
+    # --- PHASE 3: UNMASKING ---
+    # Restore the original entities
+    for idx, original_val in enumerate(entities):
+        placeholder = f"[[P_{idx}]]"
+        # Some translators might remove brackets or change casing of placeholders, 
+        # so we do a few common variations just in case.
+        translated_text = translated_text.replace(placeholder, original_val)
+        # Fallbacks for minor engine mutations
+        translated_text = translated_text.replace(f"[[p_{idx}]]", original_val)
+        translated_text = translated_text.replace(f"[P_{idx}]", original_val)
+        
+    return translated_text
 
 def translate_pdf(input_path, output_path, target_lang):
     """PDF to Translated TXT (Layout preservation is complex, focus on text for now)"""
