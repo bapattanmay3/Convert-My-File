@@ -32,7 +32,7 @@ def home():
 # --- CONVERTER ROUTES ---
 
 @app.route('/converter')
-def converter_page():
+def converter():
     return render_template('converter.html', site_name=app.config['SITE_NAME'])
 
 @app.route('/convert', methods=['POST'])
@@ -90,7 +90,7 @@ def convert_file():
 # --- TRANSLATOR ROUTES ---
 
 @app.route('/translator')
-def translator_page():
+def translator():
     languages = {
         'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German', 
         'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'zh-CN': 'Chinese (Simplified)', 
@@ -184,7 +184,7 @@ def translate_file():
 # --- MERGER ROUTES ---
 
 @app.route('/merger')
-def merger_page():
+def merger():
     return render_template('merger.html', site_name=app.config['SITE_NAME'])
 
 @app.route('/merge', methods=['POST'])
@@ -230,7 +230,7 @@ def merge_files():
 # --- COMPRESSOR ROUTES ---
 
 @app.route('/compressor')
-def compressor_page():
+def compressor():
     return render_template('compressor.html', site_name=app.config['SITE_NAME'])
 
 @app.route('/compress', methods=['POST'])
