@@ -80,64 +80,117 @@ def compressor():
 
 @app.route('/compress', methods=['POST'])
 def compress():
-    """Handle file compression (PDF and Images)"""
+    """Handle file compression with target size (PDF and Images)"""
     if 'file' not in request.files:
-        flash('No file uploaded')
-        return redirect(url_for('compressor'))
+        return jsonify({'success': False, 'error': 'No file uploaded'}), 400
     
     file = request.files['file']
     if file.filename == '':
-        flash('No file selected')
-        return redirect(url_for('compressor'))
-    
-    quality = int(request.form.get('quality', 60))
-    
-    # Save uploaded file
-    filename = secure_filename(file.filename)
-    unique_id = str(uuid.uuid4())
-    input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
-    file.save(input_path)
-    
-    # Get extension
-    ext = os.path.splitext(filename)[1].lower().replace('.', '')
-    
-    output_filename = f"compressed_{unique_id}_{filename}"
-    output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
     
     try:
-        if ext == 'pdf':
+        target_val = float(request.form.get('target_size', 0))
+        unit = request.form.get('unit', 'KB').upper()
+        
+        # Target size in bytes
+        target_bytes = target_val * 1024 if unit == 'KB' else target_val * 1024 * 1024
+        
+        # Enforcement: 5KB to 50MB
+        min_bytes = 5 * 1024
+        max_bytes = 50 * 1024 * 1024
+        
+        if target_bytes < min_bytes or target_bytes > max_bytes:
+            return jsonify({'success': False, 'error': 'We can process 5KB-50MB files'}), 400
+
+        # Save uploaded file
+        filename = secure_filename(file.filename)
+        unique_id = str(uuid.uuid4())
+        input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
+        file.save(input_path)
+        
+        # Get extension
+        ext = os.path.splitext(filename)[1].lower().replace('.', '')
+        output_filename = f"processed_{unique_id}_{filename}"
+        output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+        
+        success = False
+        message = ""
+
+        if ext in ['jpg', 'jpeg', 'png', 'webp']:
+            from PIL import Image
+            import io
+            
+            img = Image.open(input_path)
+            orig_format = 'JPEG' if ext in ['jpg', 'jpeg'] else ext.upper()
+            
+            # Simple iterative search for the best setting to hit target size
+            low, high = 1, 100
+            best_val = 75
+            
+            for _ in range(7):
+                mid = (low + high) // 2
+                buf = io.BytesIO()
+                
+                # Setup save parameters based on format
+                save_params = {'format': orig_format, 'optimize': True}
+                if orig_format in ['JPEG', 'WEBP']:
+                    save_params['quality'] = mid
+                elif orig_format == 'PNG':
+                    save_params['compress_level'] = mid // 11 # Map 1-100 to 0-9
+                
+                # Save to buffer to check size
+                temp_img = img
+                if temp_img.mode != 'RGB' and orig_format == 'JPEG':
+                    temp_img = temp_img.convert('RGB')
+                
+                temp_img.save(buf, **save_params)
+                size = buf.tell()
+                
+                if size <= target_bytes:
+                    best_val = mid
+                    low = mid + 1
+                else:
+                    high = mid - 1
+            
+            # Final save with best found value
+            final_params = {'format': orig_format, 'optimize': True}
+            if orig_format in ['JPEG', 'WEBP']:
+                final_params['quality'] = best_val
+            elif orig_format == 'PNG':
+                final_params['compress_level'] = best_val // 11
+            
+            if img.mode != 'RGB' and orig_format == 'JPEG':
+                img = img.convert('RGB')
+            img.save(output_path, **final_params)
+            success, message = True, f"Processed to approx. {unit}"
+            
+        elif ext == 'pdf':
+            # PDF compression is less granular with PyPDF2
             from PyPDF2 import PdfReader, PdfWriter
             reader = PdfReader(input_path)
             writer = PdfWriter()
-            
             for page in reader.pages:
-                page.compress_content_streams() # Basic compression
+                page.compress_content_streams()
                 writer.add_page(page)
             
             with open(output_path, 'wb') as f:
                 writer.write(f)
-            success, message = True, "PDF compressed"
-        
-        elif ext in ['jpg', 'jpeg', 'png', 'webp']:
-            from PIL import Image
-            img = Image.open(input_path)
-            if img.mode != 'RGB' and ext in ['jpg', 'jpeg']:
-                img = img.convert('RGB')
-            
-            img.save(output_path, quality=quality, optimize=True)
-            success, message = True, "Image compressed"
+            success, message = True, "PDF processed with standard compression"
         else:
-            success, message = False, f"Format {ext} not supported for compression"
-            
+            success, message = False, f"Format {ext} not supported for target-size processing"
+
         if success and os.path.exists(output_path):
-            return send_from_directory(app.config['UPLOAD_FOLDER'], output_filename, as_attachment=True)
+            return jsonify({
+                'success': True,
+                'message': message,
+                'download_url': f'/download/{output_filename}',
+                'filename': output_filename
+            })
         else:
-            flash(f'Compression failed: {message}')
-            return redirect(url_for('compressor'))
+            return jsonify({'success': False, 'error': message or "Processing failed"}), 500
             
     except Exception as e:
-        flash(f'Compression failed: {str(e)}')
-        return redirect(url_for('compressor'))
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/convert', methods=['POST'])
 def convert_file_universal():

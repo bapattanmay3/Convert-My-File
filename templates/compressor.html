@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>📉 Compressor</h1>
-<p class="tagline">Reduce file size while maintaining quality for PDF and Images</p>
+<h1>📉 Smart Size Compressor</h1>
+<p class="tagline">Compress or Expand files to your exact target size (5KB - 50MB)</p>
 
 <div class="converter-card">
-    <form id="compress-form" action="/compress" method="POST" enctype="multipart/form-data">
-        <div class="upload-area" onclick="document.getElementById('file-upload').click()">
+    <div id="upload-section">
+        <div class="upload-area" onclick="document.getElementById('file-upload').click()" id="drop-area">
             <span class="upload-icon">📉</span>
             <div class="btn-premium" style="padding: 10px 25px; margin-bottom: 10px;">Select File</div>
             <p style="color: var(--text-muted);">PDF, JPG, PNG or WebP</p>
@@ -15,82 +15,195 @@
 
         <div id="file-info" class="file-info" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span id="display-name" style="font-weight: 600;"></span>
-                <span id="display-size" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.5rem;">📄</span>
+                    <div style="display: flex; flex-direction: column;">
+                        <span id="display-name" style="font-weight: 600;"></span>
+                        <span id="display-size" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+                    </div>
+                </div>
+                <button type="button" onclick="resetUpload()" class="btn-icon"
+                    style="background:none; border:none; color:var(--text-muted); cursor:pointer;">✖</button>
             </div>
         </div>
 
-        <div style="margin-top: 30px; text-align: left;">
+        <div id="target-options" style="margin-top: 30px; text-align: left; display: none;">
             <div class="option-group">
                 <label
-                    style="color: var(--text-muted); font-size: 0.95rem; font-weight: 500; display: flex; justify-content: space-between;">
-                    Compression Quality
-                    <span id="quality-label" style="color: var(--primary);">60%</span>
+                    style="color: var(--text-muted); font-size: 0.95rem; font-weight: 500; display: block; margin-bottom: 10px;">
+                    Desired Output Size
                 </label>
-                <input type="range" name="quality" min="10" max="90" value="60" oninput="updateQuality(this.value)"
-                    style="width: 100%; height: 6px; background: #333333; border-radius: 5px; -webkit-appearance: none; outline: none; margin-top: 15px;">
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="target-size" placeholder="e.g. 500"
+                        style="flex: 1; padding: 12px; border-radius: 12px; background: #1a1a1a; border: 1px solid var(--glass-border); color: white; outline: none;">
+                    <select id="size-unit" class="form-select" style="width: 100px; margin-top: 0;">
+                        <option value="KB">KB</option>
+                        <option value="MB">MB</option>
+                    </select>
+                </div>
+                <p id="range-hint" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
+                    Acceptable range: 5KB to 50MB
+                </p>
             </div>
+
+            <button type="button" id="submit-btn" class="btn-premium" style="width: 100%; margin-top: 30px;">
+                <span>🚀 Process File</span>
+            </button>
         </div>
-
-        <button type="submit" id="submit-btn" class="btn-premium" style="width: 100%; margin-top: 30px;" disabled>
-            <span>Compress & Download</span>
-        </button>
-    </form>
-
-    {% with messages = get_flashed_messages() %}
-    {% if messages %}
-    <div
-        style="margin-top: 20px; padding: 15px; border-radius: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; text-align: center;">
-        {% for message in messages %}
-        <p>{{ message }}</p>
-        {% endfor %}
     </div>
-    {% endif %}
-    {% endwith %}
+
+    <!-- Processing State -->
+    <div id="status-msg" style="margin-top: 20px; display: none; text-align: center;">
+        <div style="color: var(--primary); font-size: 1.2rem; margin-bottom: 10px;">
+            <span class="loading-dots">Processing your file</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Optimizing quality to hit your target size...</p>
+    </div>
+
+    <!-- Result Area -->
+    <div id="result-area"
+        style="display: none; margin-top: 30px; padding: 25px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 20px; text-align: center;">
+        <h3 style="color: #10b981; margin-bottom: 20px;">✅ Processing Complete!</h3>
+        <a id="download-link" href="#" class="btn-premium">
+            ⬇️ Download Processed File
+        </a>
+    </div>
+
+    <!-- Error Message -->
+    <div id="error-msg"
+        style="display: none; margin-top: 20px; padding: 15px; border-radius: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; text-align: center;">
+    </div>
 </div>
 
 <style>
-    input[type="range"]::-webkit-slider-thumb {
+    .loading-dots:after {
+        content: '.';
+        animation: dots 1.5s steps(5, end) infinite;
+    }
+
+    @keyframes dots {
+
+        0%,
+        20% {
+            content: '.';
+        }
+
+        40% {
+            content: '..';
+        }
+
+        60% {
+            content: '...';
+        }
+
+        80%,
+        100% {
+            content: '';
+        }
+    }
+
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
         -webkit-appearance: none;
-        width: 20px;
-        height: 20px;
-        background: var(--primary);
-        border-radius: 50%;
-        cursor: pointer;
-        box-shadow: 0 0 10px rgba(255, 107, 74, 0.4);
+        margin: 0;
     }
 </style>
 
 <script>
-    const form = document.getElementById('compress-form');
+    const fileUpload = document.getElementById('file-upload');
+    const dropArea = document.getElementById('drop-area');
+    const fileInfo = document.getElementById('file-info');
+    const targetOptions = document.getElementById('target-options');
     const submitBtn = document.getElementById('submit-btn');
-    const qualityLabel = document.getElementById('quality-label');
+    const statusMsg = document.getElementById('status-msg');
+    const resultArea = document.getElementById('result-area');
+    const errorMsg = document.getElementById('error-msg');
+    const downloadLink = document.getElementById('download-link');
 
-    function updateQuality(val) {
-        qualityLabel.textContent = val + '%';
-    }
+    let selectedFile = null;
 
     function handleFileSelect(input) {
-        const fileInfo = document.getElementById('file-info');
-        const displayName = document.getElementById('display-name');
-        const displaySize = document.getElementById('display-size');
-
         if (input.files && input.files[0]) {
-            const file = input.files[0];
-            displayName.textContent = file.name;
-            displaySize.textContent = (file.size / 1024).toFixed(1) + ' KB';
+            selectedFile = input.files[0];
+            document.getElementById('display-name').textContent = selectedFile.name;
+            document.getElementById('display-size').textContent = (selectedFile.size / 1024).toFixed(1) + ' KB';
+
+            dropArea.style.display = 'none';
             fileInfo.style.display = 'block';
-            submitBtn.disabled = false;
-        } else {
-            fileInfo.style.display = 'none';
-            submitBtn.disabled = true;
+            targetOptions.style.display = 'block';
+            errorMsg.style.display = 'none';
+            resultArea.style.display = 'none';
         }
     }
 
-    form.onsubmit = () => {
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.7';
-        submitBtn.querySelector('span').textContent = 'Compressing...';
+    function resetUpload() {
+        selectedFile = null;
+        fileUpload.value = '';
+        fileInfo.style.display = 'none';
+        targetOptions.style.display = 'none';
+        dropArea.style.display = 'block';
+        resultArea.style.display = 'none';
+    }
+
+    submitBtn.onclick = async () => {
+        const targetVal = document.getElementById('target-size').value;
+        const unit = document.getElementById('size-unit').value;
+
+        if (!selectedFile) return;
+        if (!targetVal || targetVal <= 0) {
+            showError("Please enter a valid target size.");
+            return;
+        }
+
+        // Target size in bytes for client-side validation hint
+        const bytes = unit === 'KB' ? targetVal * 1024 : targetVal * 1024 * 1024;
+        const min = 5 * 1024;
+        const max = 50 * 1024 * 1024;
+
+        if (bytes < min || bytes > max) {
+            showError("We can process 5KB-50MB files");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('target_size', targetVal);
+        formData.append('unit', unit);
+
+        // UI Transitions
+        targetOptions.style.display = 'none';
+        fileInfo.style.display = 'none';
+        statusMsg.style.display = 'block';
+        errorMsg.style.display = 'none';
+
+        try {
+            const response = await fetch('/compress', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            statusMsg.style.display = 'none';
+
+            if (data.success) {
+                downloadLink.href = data.download_url;
+                resultArea.style.display = 'block';
+            } else {
+                showError(data.error || "Processing failed");
+                targetOptions.style.display = 'block';
+                fileInfo.style.display = 'block';
+            }
+        } catch (error) {
+            statusMsg.style.display = 'none';
+            showError("Network error. Please try again.");
+            targetOptions.style.display = 'block';
+            fileInfo.style.display = 'block';
+        }
     };
+
+    function showError(msg) {
+        errorMsg.textContent = "❌ " + msg;
+        errorMsg.style.display = 'block';
+    }
 </script>
 {% endblock %}
