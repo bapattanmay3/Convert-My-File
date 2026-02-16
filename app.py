@@ -351,15 +351,19 @@ def translate_file_route():
         # Import translator function
         from translator_engine import translate_document
         
+        # Handle PDF to TXT conversion path early
+        if file_ext == '.pdf':
+            output_path = output_path.replace('.pdf', '.txt')
+            
         # Translate with timeout
-        success, message, actual_output_path = translate_document(
+        success, message = translate_document(
             input_path, output_path, target_lang, source_lang, file_ext
         )
         
-        # Update output_filename to reflect any extension changes (e.g., .pdf -> .txt)
-        output_filename = os.path.basename(actual_output_path)
+        # Update output_filename for response
+        output_filename = os.path.basename(output_path)
         
-        if success and os.path.exists(actual_output_path):
+        if success and os.path.exists(output_path):
             # Verify the translation is valid for the target language
             try:
                 with open(actual_output_path, 'r', encoding='utf-8') as f:
