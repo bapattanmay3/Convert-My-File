@@ -210,11 +210,22 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
         # 3. Convert translated DOCX back to PDF (using weasyprint bridge for script support)
         # Handle conversion via pypandoc to HTML then to PDF for best language script rendering
         import pypandoc
-        temp_html = input_path + ".translated.html"
-        pypandoc.convert_file(temp_translated_docx, 'html', outputfile=temp_html)
-        
         from weasyprint import HTML
-        HTML(temp_html).write_pdf(output_path)
+        
+        # Use standalone mode to include CSS and encoding metadata
+        # Setting title to avoid empty metadata warnings
+        extra_args = ['--standalone', '--metadata', 'title=Translated Document']
+        html_content = pypandoc.convert_file(temp_translated_docx, 'html', extra_args=extra_args)
+        
+        # Explicitly ensure UTF-8 for weasyprint
+        if isinstance(html_content, bytes):
+            html_content = html_content.decode('utf-8', errors='ignore')
+        
+        # Inject UTF-8 meta tag as a fail-safe
+        if '<meta charset="utf-8"' not in html_content.lower():
+            html_content = html_content.replace('<head>', '<head><meta charset="utf-8">')
+            
+        HTML(string=html_content).write_pdf(output_path)
         
         # Cleanup
         for tmp in [temp_docx, temp_translated_docx, temp_html]:

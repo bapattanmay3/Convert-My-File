@@ -374,7 +374,17 @@ def translate_file_route():
         
         # Internal name used for filesystem (safe)
         safe_base = secure_filename(base_name)
-        internal_filename = f"trans_{unique_id}_Translated_{safe_base}{file_ext}"
+        
+        # Standardize internal extensions for preview compatibility
+        # Legacy .doc is bridged to .docx internally
+        # Legacy .xls is bridged to .xlsx internally
+        target_ext = file_ext
+        if file_ext == '.doc':
+            target_ext = '.docx'
+        elif file_ext == '.xls':
+            target_ext = '.xlsx'
+            
+        internal_filename = f"trans_{unique_id}_Translated_{safe_base}{target_ext}"
         if file_ext == '.pdf':
             internal_filename = f"trans_{unique_id}_Translated_{safe_base}.pdf"
             
