@@ -237,25 +237,60 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
         return False, str(e)
 
 def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate Word documents preserving formatting"""
+    """Translate Word documents with batching to prevent timeouts/502s"""
     try:
-        from docx import Document  # ✅ ADD THIS
+        from docx import Document
         doc = Document(input_path)
         
-        # Translate paragraphs
-        for para in doc.paragraphs:
-            if para.text and para.text.strip():
-                if not should_preserve(para.text):
-                    para.text = translate_text(para.text, target_lang, source_lang)
+        # Helper to process a batch of text
+        def process_batch(paragraphs, current_batch_text, batch_indices):
+            if not current_batch_text:
+                return
+            
+            # Combine batch with a unique separator that's unlikely to be in text
+            separator = " ||| "
+            combined_text = separator.join(current_batch_text)
+            
+            translated_combined = translate_text(combined_text, target_lang, source_lang)
+            translated_parts = translated_combined.split(separator)
+            
+            # If split count matches, apply translations
+            if len(translated_parts) == len(batch_indices):
+                for idx, trans in zip(batch_indices, translated_parts):
+                    paragraphs[idx].text = trans.strip()
+            else:
+                # Fallback: translate individually if batching fails to preserve structure
+                for idx in batch_indices:
+                    paragraphs[idx].text = translate_text(paragraphs[idx].text, target_lang, source_lang)
+
+        # 1. Translate Main Paragraphs in Batches
+        all_paras = list(doc.paragraphs)
+        current_batch = []
+        current_indices = []
+        current_length = 0
         
-        # Translate tables
+        for i, para in enumerate(all_paras):
+            text = para.text.strip()
+            if text and not should_preserve(text):
+                current_batch.append(text)
+                current_indices.append(i)
+                current_length += len(text)
+                
+                # Batch limit: ~3000 chars or 20 paragraphs
+                if current_length > 3000 or len(current_batch) >= 20:
+                    process_batch(all_paras, current_batch, current_indices)
+                    current_batch, current_indices, current_length = [], [], 0
+        
+        # Process remaining
+        process_batch(all_paras, current_batch, current_indices)
+        
+        # 2. Translate Tables (often small, so we'll do per-cell for now but keep an eye on it)
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for para in cell.paragraphs:
-                        if para.text and para.text.strip():
-                            if not should_preserve(para.text):
-                                para.text = translate_text(para.text, target_lang, source_lang)
+                        if para.text and para.text.strip() and not should_preserve(para.text):
+                            para.text = translate_text(para.text, target_lang, source_lang)
         
         doc.save(output_path)
         return True, "Word document translation completed"
@@ -350,9 +385,27 @@ def translate_document(input_path, output_path, target_lang, source_lang='auto',
     }
     
     translator = translators.get(file_ext)
+    
+    # Special case: Legacy .doc bridge
+    if file_ext == '.doc':
+        try:
+            import pypandoc
+            temp_docx = input_path + ".bridge.docx"
+            # Ensure pypandoc uses the system pandoc
+            pypandoc.convert_file(input_path, 'docx', outputfile=temp_docx)
+            
+            # Translate the bridge file
+            success, message = translate_docx(temp_docx, output_path, target_lang, source_lang)
+            
+            # Cleanup bridge
+            if os.path.exists(temp_docx):
+                os.remove(temp_docx)
+            return success, message
+        except Exception as de:
+            print(f"Legacy .doc conversion failed: {de}")
+            return False, f"Legacy .doc support requires pandoc: {str(de)}"
+
     if translator:
-        # Special handling for PDF to indicate the output conversion if necessary
-        # (Though dispatcher usually just calls the function)
         return translator(input_path, output_path, target_lang, source_lang)
     else:
         return False, f"Unsupported file type: {file_ext}"

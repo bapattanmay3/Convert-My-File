@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpangoft2-1.0-0 \
     # Poppler for pdf2image
     poppler-utils \
+    # Pandoc for legacy doc conversion
+    pandoc \
     # File type detection
     libmagic1 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
