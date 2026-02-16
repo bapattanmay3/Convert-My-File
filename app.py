@@ -409,9 +409,9 @@ def translate_file_route():
         # Handle both 2-value and 3-value returns
         if isinstance(result, tuple) and len(result) == 2:
             success, message = result
-            preview_url = None
+            res_path = output_path if success else None
         elif isinstance(result, tuple) and len(result) == 3:
-            success, message, preview_url = result
+            success, message, res_path = result
         else:
             # Log unexpected return
             try:
@@ -423,27 +423,20 @@ def translate_file_route():
         # Update output_filename for response
         output_filename = os.path.basename(output_path)
         
-        if success and os.path.exists(output_path):
+        if success and res_path and os.path.exists(res_path):
             # Verify the translation is valid for the target language
             try:
-                with open(output_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
+                with open(res_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
                     translated_sample = f.read(1000)
                 
                 with open(input_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
-                    # Note: For non-text files, this might be garbled, but that's okay for similarity check
                     original_sample = f.read(1000) 
                 
                 from translator_engine import is_valid_translation
                 if not is_valid_translation(translated_sample, target_lang, original_sample):
-                    try:
-                        print(f"WARNING: Translation to {target_lang} may be invalid or same as original")
-                    except UnicodeEncodeError:
-                        pass
+                    print(f"WARNING: Translation to {target_lang} may be invalid")
             except Exception as ve:
-                try:
-                    print(f"Validation warning: {ve}")
-                except UnicodeEncodeError:
-                    pass
+                pass
             
         # Updated logic: Use the exact path returned by the engine
         if success and res_path and os.path.exists(res_path):
