@@ -1,7 +1,9 @@
+# Keep ONLY built-in imports at top
 import os
 import re
 import time
 import csv
+# All other imports moved inside functions
 
 # ===== GLOBAL LANGUAGES CONSTANT =====
 LANGUAGES = {
@@ -81,7 +83,7 @@ def should_preserve(text):
 # ===== TRANSLATE FUNCTION USING TRANSLATORS LIBRARY =====
 def translate_text(text, target_lang, source_lang='auto', max_retries=3):
     """Safe translation with UTF-8 preservation"""
-    from deep_translator import GoogleTranslator
+    from deep_translator import GoogleTranslator  # ✅ ADD THIS
     if not text or should_preserve(text):
         return text
     
@@ -175,6 +177,7 @@ def is_valid_translation(translated_text, target_lang, original_text=None):
 # ===== PDF TRANSLATOR (pdfplumber) =====
 def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
     """Translate PDF using pdfplumber for cleaner text extraction"""
+    import PyPDF2  # ✅ ADD THIS
     import pdfplumber
     try:
         text_content = []
@@ -227,7 +230,7 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
 # ===== WORD DOCUMENT TRANSLATOR =====
 def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
     """Translate Word document preserving structure"""
-    from docx import Document
+    from docx import Document  # ✅ ADD THIS
     try:
         doc = Document(input_path)
         for para in doc.paragraphs:
@@ -249,7 +252,7 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
 # ===== EXCEL TRANSLATOR =====
 def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
     """Translate Excel files preserving structure"""
-    import openpyxl
+    import openpyxl  # ✅ ADD THIS
     try:
         wb = openpyxl.load_workbook(input_path)
         for sheet_name in wb.sheetnames:
