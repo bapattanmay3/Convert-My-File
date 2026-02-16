@@ -356,9 +356,17 @@ def translate_file_route():
             output_path = output_path.replace('.pdf', '.txt')
             
         # Translate with timeout
-        success, message = translate_document(
+        result = translate_document(
             input_path, output_path, target_lang, source_lang, file_ext
         )
+        try:
+            print(f"DEBUG - Return type: {type(result)}")
+            print(f"DEBUG - Return value: {result}")
+            print(f"DEBUG - Length: {len(result) if isinstance(result, tuple) else 'not tuple'}")
+        except:
+            pass
+            
+        success, message = result  # This will show the actual error
         
         # Update output_filename for response
         output_filename = os.path.basename(output_path)
