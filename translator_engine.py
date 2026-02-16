@@ -127,13 +127,54 @@ def translate_text(text, target_lang, source_lang='auto', max_retries=3):
     
     return ' '.join(translated_chunks)
 
-def is_valid_hindi(text):
-    """Check if text contains valid Hindi characters"""
-    if not text:
+def is_valid_translation(translated_text, target_lang, original_text=None):
+    """
+    Check if the translation is valid for the target language.
+    1. For languages with distinct scripts, checks Unicode ranges.
+    2. For Latin-based languages, checks if it's different from original (if provided).
+    """
+    if not translated_text:
         return False
-    # Hindi Unicode range: \u0900-\u097F
-    hindi_chars = sum(1 for c in text if '\u0900' <= c <= '\u097F')
-    return hindi_chars > len(text) * 0.3  # At least 30% Hindi chars
+    
+    target = target_lang.split('-')[0].lower()
+    
+    # Script-based validation mapping
+    script_ranges = {
+        'hi': ('\u0900', '\u097F'),  # Devanagari (Hindi, Marathi, etc.)
+        'bn': ('\u0980', '\u09FF'),  # Bengali
+        'ar': ('\u0600', '\u06FF'),  # Arabic
+        'fa': ('\u0600', '\u06FF'),  # Persian
+        'ur': ('\u0600', '\u06FF'),  # Urdu
+        'ru': ('\u0400', '\u04FF'),  # Cyrillic (Russian, etc.)
+        'uk': ('\u0400', '\u04FF'),  # Ukrainian
+        'be': ('\u0400', '\u04FF'),  # Belarusian
+        'el': ('\u0370', '\u03FF'),  # Greek
+        'iw': ('\u0590', '\u05FF'),  # Hebrew
+        'he': ('\u0590', '\u05FF'),  # Hebrew (alternative code)
+        'ja': ('\u3040', '\u9FFF'),  # Japanese (Hiragana/Katakana/Kanji)
+        'zh': ('\u4E00', '\u9FFF'),  # Chinese (CJK Unified Ideographs)
+        'ko': ('\uAC00', '\uD7AF'),  # Korean (Hangul)
+        'ta': ('\u0B80', '\u0BFF'),  # Tamil
+        'te': ('\u0C00', '\u0C7F'),  # Telugu
+        'kn': ('\u0C80', '\u0CFF'),  # Kannada
+        'ml': ('\u0D00', '\u0D7F'),  # Malayalam
+        'gu': ('\u0A80', '\u0AFF'),  # Gujarati
+        'pa': ('\u0A00', '\u0A7F'),  # Punjabi
+        'th': ('\u0E00', '\u0E7F'),  # Thai
+    }
+    
+    if target in script_ranges:
+        low, high = script_ranges[target]
+        chars_in_range = sum(1 for c in translated_text if low <= c <= high)
+        return chars_in_range > len(translated_text.strip()) * 0.2  # 20% threshold
+    
+    # For Latin-based or others, check if it's different from original
+    if original_text:
+        # Simple similarity check: if they are identical, it's likely failed
+        if translated_text.strip() == original_text.strip() and len(original_text) > 10:
+            return False
+            
+    return True
 
 # ===== PDF TRANSLATOR (pdfplumber) =====
 def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
@@ -142,6 +183,9 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
         text_content = []
         # Update output path early for consistency
         output_txt = output_path if output_path.endswith('.txt') else output_path.replace('.pdf', '.txt')
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_txt), exist_ok=True)
         
         with pdfplumber.open(input_path) as pdf:
             total_pages = len(pdf.pages)
@@ -164,11 +208,21 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
         # Write translated text with UTF-8 BOM for better Windows compatibility
         with open(output_txt, 'w', encoding='utf-8-sig') as f:
             f.write('\n\n'.join(text_content))
+        
+        # Verify the file was written correctly
+        try:
+            with open(output_txt, 'r', encoding='utf-8-sig') as f:
+                verification = f.read(100)
+                print(f"Verification - First 100 chars: {repr(verification)}")
+        except Exception as ve:
+            print(f"Verification step failed: {ve}")
             
         return True, f"PDF translation completed: {total_pages} pages", output_txt
     except Exception as e:
         try:
             print(f"PDF translation error: {e}")
+            import traceback
+            traceback.print_exc()
         except UnicodeEncodeError:
             print(f"PDF translation error: [Unicode Error]")
         return False, str(e), output_path
@@ -246,10 +300,15 @@ def translate_text_file(input_path, output_path, target_lang, source_lang='auto'
         
         translated = translate_text(content, target_lang, source_lang)
         
+        # Force UTF-8 with BOM
         with open(output_path, 'w', encoding='utf-8-sig') as f:
             f.write(translated)
         return True, "Text translation completed"
     except Exception as e:
+        try:
+            print(f"Text translation error: {e}")
+        except UnicodeEncodeError:
+            pass
         return False, str(e)
 
 # ===== MAIN DISPATCHER FUNCTION =====
