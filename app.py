@@ -467,11 +467,11 @@ def get_preview(filename):
     
     try:
         if ext == 'txt':
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
                 content = f.read(10000) # Preview first 10k chars
             return jsonify({'success': True, 'content': content, 'type': 'text'})
             
-        elif ext == 'docx':
+        elif ext in ['docx', 'doc']:
             from docx import Document
             doc = Document(file_path)
             full_text = []
@@ -481,14 +481,15 @@ def get_preview(filename):
             return jsonify({'success': True, 'content': content, 'type': 'text'})
             
         elif ext == 'pdf':
-            # Use PyPDF2 to extract text from the translated PDF for preview
-            import PyPDF2
-            with open(file_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                content = ""
+            # Use pdfplumber for robust text extraction (handles non-Latin scripts like Hindi much better)
+            import pdfplumber
+            content = ""
+            with pdfplumber.open(file_path) as pdf:
                 # Get text from first few pages to show in preview
-                for page_idx in range(min(len(reader.pages), 5)):
-                    content += reader.pages[page_idx].extract_text() + "\n"
+                for page in pdf.pages[:3]:
+                    text = page.extract_text()
+                    if text:
+                        content += text + "\n"
             return jsonify({'success': True, 'content': content[:10000], 'type': 'text'})
             
         elif ext in ['xlsx', 'xls']:
