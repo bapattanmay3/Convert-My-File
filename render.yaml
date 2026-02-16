@@ -1,10 +1,9 @@
 services:
   - type: web
     name: convert-my-file
-    runtime: python
+    runtime: docker
     plan: free
-    buildCommand: "./render-build.sh"
-    startCommand: "python -m gunicorn app:app"
+    startCommand: "gunicorn --bind 0.0.0.0:10000 --timeout 120 app:app"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
