@@ -203,9 +203,9 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
         cv.close()
         
         # 2. Translate the structural DOCX
-        success, msg = translate_docx(temp_docx, temp_translated_docx, target_lang, source_lang)
+        success, msg, _ = translate_docx(temp_docx, temp_translated_docx, target_lang, source_lang)
         if not success:
-            return False, f"Structural translation failed: {msg}"
+            return False, f"Structural translation failed: {msg}", None
             
         # 3. Convert translated DOCX back to PDF (using weasyprint bridge for script support)
         # Handle conversion via pypandoc to HTML then to PDF for best language script rendering
@@ -231,7 +231,7 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
         for tmp in [temp_docx, temp_translated_docx, temp_html]:
             if os.path.exists(tmp): os.remove(tmp)
             
-        return True, "PDF structural translation completed successfully"
+        return True, "PDF structural translation completed successfully", output_path
         
     except Exception as e:
         print(f"Structural PDF translation error: {e}")
@@ -252,9 +252,9 @@ def translate_pdf_to_text_fallback(input_path, output_path, target_lang, source_
         
         with open(output_path, 'w', encoding='utf-8-sig') as f:
             f.write('\n\n'.join(text_content))
-        return True, "PDF translated to text (Structure preservation failed)"
+        return True, "PDF translated to text (Structure preservation failed)", output_path
     except Exception as e:
-        return False, str(e)
+        return False, str(e), None
 
 def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
     """Translate Word documents with batching to prevent timeouts/502s"""
@@ -341,12 +341,12 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
                     time.sleep(0.5)
         
         doc.save(output_path)
-        return True, "Word document translation completed"
+        return True, "Word document translation completed", output_path
     except Exception as e:
         print(f"DOCX translation error: {e}")
         import traceback
         traceback.print_exc()
-        return False, str(e)
+        return False, str(e), None
 
 def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
     """Translate Excel files preserving all sheets and formatting (User Robust Version)"""
@@ -400,7 +400,7 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
         if temp_xlsx and os.path.exists(temp_xlsx):
             os.remove(temp_xlsx)
             
-        return True, f"Excel translation completed: {translated_count} cells translated"
+        return True, f"Excel translation completed: {translated_count} cells translated", output_path
         
     except Exception as e:
         if temp_xlsx and os.path.exists(temp_xlsx):
@@ -408,7 +408,7 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
         print(f"Excel translation error: {e}")
         import traceback
         traceback.print_exc()
-        return False, f"Excel translation failed: {str(e)}"
+        return False, f"Excel translation failed: {str(e)}", None
 
 def translate_csv(input_path, output_path, target_lang, source_lang='auto'):
     """Translate CSV files with row-based batching"""
@@ -418,7 +418,7 @@ def translate_csv(input_path, output_path, target_lang, source_lang='auto'):
             rows = list(reader)
         
         if not rows:
-            return True, "Empty CSV"
+            return True, "Empty CSV", output_path
 
         translated_rows = []
         for row in rows:
@@ -452,9 +452,9 @@ def translate_csv(input_path, output_path, target_lang, source_lang='auto'):
             writer = csv.writer(f)
             writer.writerows(translated_rows)
             
-        return True, "CSV translation completed"
+        return True, "CSV translation completed", output_path
     except Exception as e:
-        return False, str(e)
+        return False, str(e), None
 
 # ===== TEXT FILE TRANSLATOR =====
 def translate_text_file(input_path, output_path, target_lang, source_lang='auto'):
@@ -468,13 +468,13 @@ def translate_text_file(input_path, output_path, target_lang, source_lang='auto'
         # Force UTF-8 with BOM
         with open(output_path, 'w', encoding='utf-8-sig') as f:
             f.write(translated)
-        return True, "Text translation completed"
+        return True, "Text translation completed", output_path
     except Exception as e:
         try:
             print(f"Text translation error: {e}")
         except UnicodeEncodeError:
             pass
-        return False, str(e)
+        return False, str(e), None
 
 # ===== MAIN DISPATCHER FUNCTION =====
 def translate_document(input_path, output_path, target_lang, source_lang='auto', file_ext=None):
@@ -517,7 +517,7 @@ def translate_document(input_path, output_path, target_lang, source_lang='auto',
     if translator:
         return translator(input_path, output_path, target_lang, source_lang)
     else:
-        return False, f"Unsupported file type: {file_ext}"
+        return False, f"Unsupported file type: {file_ext}", None
 
 # Backward compatibility (some files might still call translate_file)
 def translate_file(input_path, output_path, target_lang, source_lang='auto'):
