@@ -301,9 +301,10 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
         return False, str(e), None
 
 def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate Excel files with Global Dictionary Batching (Speed & RAM optimized)"""
+    """Translate Excel files with Memory-Safe Global Batching (Render Free Tier optimized)"""
     import os
     import time
+    import gc
     file_ext = os.path.splitext(input_path)[1].lower()
     temp_xlsx = None
     
@@ -321,27 +322,31 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
             current_input = temp_xlsx
             # Explicitly delete pandas objects to free RAM immediately
             del xls_data
+            gc.collect()
         else:
             current_input = input_path
 
-        print(f"Global Batching: Loading {current_input}")
-        wb = openpyxl.load_workbook(current_input)
+        print(f"Global Batching (Memory-Safe): Loading {current_input}")
         
-        # 2. SCAN PHASE: Collect all unique translatable strings
+        # 2. SCAN PHASE: Collect all unique translatable strings using read_only mode (LIGHTWEIGHT)
         unique_texts = set()
-        for sheet in wb.worksheets:
-            for row in sheet.iter_rows():
-                for cell in row:
-                    if cell.value and isinstance(cell.value, str) and not cell.data_type == 'f':
-                        val = cell.value.strip()
-                        if val and len(val) > 1 and not should_preserve(val):
-                            unique_texts.add(val)
+        wb_scan = openpyxl.load_workbook(current_input, read_only=True)
+        for sheet in wb_scan.worksheets:
+            for row in sheet.iter_rows(values_only=True):
+                for val in row:
+                    if val and isinstance(val, str):
+                        val_clean = val.strip()
+                        if val_clean and len(val_clean) > 1 and not should_preserve(val_clean):
+                            unique_texts.add(val_clean)
+        wb_scan.close()
+        del wb_scan
+        gc.collect()
         
         text_list = sorted(list(unique_texts))
         total_unique = len(text_list)
         print(f"Found {total_unique} unique strings to translate")
         
-        # 3. TRANSLATION PHASE: Batch translate the dictionary
+        # 3. TRANSLATION PHASE: Batch translate the dictionary (Smaller batches for RAM safety)
         translation_map = {}
         if text_list:
             current_batch = []
@@ -370,24 +375,34 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
             for text in text_list:
                 current_batch.append(text)
                 current_len += len(text)
-                if current_len > 3000 or len(current_batch) >= 40:
+                # Reduced batch size for RAM safety (40 -> 25)
+                if current_len > 2500 or len(current_batch) >= 25:
                     process_text_batch(current_batch)
                     current_batch, current_len = [], 0
                     time.sleep(0.3)
+                    gc.collect() # Clean up after each batch
             
             process_text_batch(current_batch)
 
-        # 4. MAPPING PHASE: Apply translations back to workbook
+        # 4. MAPPING PHASE: Apply translations back to workbook (Full load only for writing)
+        wb = openpyxl.load_workbook(current_input)
         translated_cells = 0
         for sheet in wb.worksheets:
             for row in sheet.iter_rows():
                 for cell in row:
-                    if cell.value in translation_map:
-                        cell.value = translation_map[cell.value]
-                        translated_cells += 1
+                    if cell.value and isinstance(cell.value, str) and not cell.data_type == 'f':
+                        val_stripped = cell.value.strip()
+                        if val_stripped in translation_map:
+                            cell.value = translation_map[val_stripped]
+                            translated_cells += 1
         
         wb.save(output_path)
-        print(f"Excel Fix Complete: {translated_cells} cells updated via global map")
+        print(f"Memory-Safe Excel Fix Complete: {translated_cells} cells updated")
+        
+        # Immediate cleanup
+        del wb
+        del translation_map
+        gc.collect()
         
         if temp_xlsx and os.path.exists(temp_xlsx):
             os.remove(temp_xlsx)
