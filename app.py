@@ -502,9 +502,21 @@ def get_preview(filename):
                 doc = Document(file_path)
                 
             full_text = []
+            # Extract from paragraphs
             for para in doc.paragraphs:
-                full_text.append(para.text)
+                if para.text.strip():
+                    full_text.append(para.text)
+            
+            # Extract from tables (many DOCs have content here)
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                    if row_text:
+                        full_text.append(" | ".join(row_text))
+                        
             content = "\n".join(full_text)[:10000]
+            if not content.strip():
+                content = "[Document structure found, but no text could be extracted for preview. Please download the file to view.]"
             return jsonify({'success': True, 'content': content, 'type': 'text'})
             
         elif ext == 'pdf':
