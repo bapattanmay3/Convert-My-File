@@ -227,45 +227,55 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
             print(f"PDF translation error: [Unicode Error]")
         return False, str(e)
 
-# ===== WORD DOCUMENT TRANSLATOR =====
 def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate Word document preserving structure"""
-    from docx import Document  # ✅ ADD THIS
+    """Translate Word documents preserving formatting"""
     try:
+        from docx import Document  # ✅ ADD THIS
         doc = Document(input_path)
-        for para in doc.paragraphs:
-            if para.text and not should_preserve(para.text):
-                para.text = translate_text(para.text, target_lang, source_lang)
         
+        # Translate paragraphs
+        for para in doc.paragraphs:
+            if para.text and para.text.strip():
+                if not should_preserve(para.text):
+                    para.text = translate_text(para.text, target_lang, source_lang)
+        
+        # Translate tables
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
                     for para in cell.paragraphs:
-                        if para.text and not should_preserve(para.text):
-                            para.text = translate_text(para.text, target_lang, source_lang)
+                        if para.text and para.text.strip():
+                            if not should_preserve(para.text):
+                                para.text = translate_text(para.text, target_lang, source_lang)
         
         doc.save(output_path)
-        return True, "Word translation completed"
+        return True, "Word document translation completed"
     except Exception as e:
+        print(f"DOCX translation error: {e}")
+        import traceback
+        traceback.print_exc()
         return False, str(e)
 
-# ===== EXCEL TRANSLATOR =====
 def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate Excel files preserving structure"""
-    import openpyxl  # ✅ ADD THIS
+    """Translate Excel files preserving all sheets"""
     try:
+        import openpyxl  # ✅ ADD THIS
         wb = openpyxl.load_workbook(input_path)
+        
         for sheet_name in wb.sheetnames:
             sheet = wb[sheet_name]
             for row in sheet.iter_rows():
                 for cell in row:
                     if cell.value and isinstance(cell.value, str):
-                        if not should_preserve(cell.value):
+                        if cell.value.strip() and not should_preserve(cell.value):
                             cell.value = translate_text(cell.value, target_lang, source_lang)
         
         wb.save(output_path)
         return True, "Excel translation completed"
     except Exception as e:
+        print(f"Excel translation error: {e}")
+        import traceback
+        traceback.print_exc()
         return False, str(e)
 
 # ===== CSV TRANSLATOR =====
@@ -315,31 +325,28 @@ def translate_text_file(input_path, output_path, target_lang, source_lang='auto'
 
 # ===== MAIN DISPATCHER FUNCTION =====
 def translate_document(input_path, output_path, target_lang, source_lang='auto', file_ext=None):
-    """Main dispatcher for document translation"""
+    """Main dispatcher function - supports all formats"""
     if file_ext is None:
         file_ext = os.path.splitext(input_path)[1].lower()
     
-    # Map extensions to translator functions
-    translators_map = {
+    # Map file extensions to translator functions
+    translators = {
         '.pdf': translate_pdf,
         '.docx': translate_docx,
-        '.doc': translate_docx,
+        '.doc': translate_docx,  # Same as docx
         '.xlsx': translate_excel,
-        '.xls': translate_excel,
-        '.csv': translate_csv,
-        '.txt': translate_text_file,
+        '.xls': translate_excel,   # Same as xlsx
+        '.csv': translate_csv,      
+        '.txt': translate_text_file 
     }
     
-    translator_func = translators_map.get(file_ext)
-    if translator_func:
-        # For PDF, the output is always TXT in this basic engine (unless using premium tools)
-        if file_ext == '.pdf':
-            output_path = output_path.replace('.pdf', '.txt')
-            
-        success, message = translator_func(input_path, output_path, target_lang, source_lang)
-        return success, message, output_path
+    translator = translators.get(file_ext)
+    if translator:
+        # Special handling for PDF to indicate the output conversion if necessary
+        # (Though dispatcher usually just calls the function)
+        return translator(input_path, output_path, target_lang, source_lang)
     else:
-        return False, f"Unsupported file type: {file_ext}", output_path
+        return False, f"Unsupported file type: {file_ext}"
 
 # Backward compatibility (some files might still call translate_file)
 def translate_file(input_path, output_path, target_lang, source_lang='auto'):
