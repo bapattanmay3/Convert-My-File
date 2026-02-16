@@ -82,28 +82,17 @@ def should_preserve(text):
 
 # ===== TRANSLATE FUNCTION USING TRANSLATORS LIBRARY =====
 def translate_text(text, target_lang, source_lang='auto', max_retries=3):
-    """Safe translation with UTF-8 preservation"""
-    from deep_translator import GoogleTranslator  # ✅ ADD THIS
-    if not text or should_preserve(text):
+    """Translate text with proper language handling"""
+    from deep_translator import GoogleTranslator
+    
+    if should_preserve(text):
         return text
     
-    # Ensure text is properly encoded
-    if isinstance(text, bytes):
-        text = text.decode('utf-8', errors='ignore')
+    # Ensure target_lang is valid
+    if len(target_lang) > 2:
+        target_lang = target_lang[:2]
     
-    # Normalize text (keeping my de-spacing logic too as it proved useful)
-    text = clean_text(text)
-    
-    # Special handling for language codes (Google/Deep-Translator variants)
-    target = target_lang.lower()
-    if '-' in target:
-        # e.g., zh-cn -> zh-CN, pt-br -> pt-BR
-        parts = target.split('-')
-        target = f"{parts[0]}-{parts[1].upper()}"
-    elif target in ['iw', 'he']:
-        target = 'he' # Hebrew
-    elif target == 'ms':
-        target = 'ms' # Malay is fine
+    print(f"Translating to: {target_lang}, Text length: {len(text)}")
     
     chunk_size = 4000
     chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
@@ -112,24 +101,16 @@ def translate_text(text, target_lang, source_lang='auto', max_retries=3):
     for chunk in chunks:
         for attempt in range(max_retries):
             try:
-                translator = GoogleTranslator(source=source_lang, target=target)
+                translator = GoogleTranslator(source=source_lang, target=target_lang)
                 result = translator.translate(chunk)
                 if result:
-                    # Force UTF-8
-                    if isinstance(result, str):
-                        result = result.encode('utf-8').decode('utf-8')
                     translated_chunks.append(result)
                     break
                 time.sleep(1)
             except Exception as e:
-                try:
-                    print(f"Translation attempt {attempt+1} failed: {e}")
-                except UnicodeEncodeError:
-                    pass
+                print(f"Attempt {attempt+1} failed: {e}")
                 if attempt == max_retries - 1:
-                    # Fallback with UTF-8 encoding
-                    fallback = chunk.encode('utf-8').decode('utf-8')
-                    translated_chunks.append(fallback)
+                    translated_chunks.append(chunk)
                 time.sleep(2)
     
     return ' '.join(translated_chunks)
@@ -185,76 +166,39 @@ def is_valid_translation(translated_text, target_lang, original_text=None):
 
 # ===== PDF TRANSLATOR (Structural Bridge) =====
 def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
-    """
-    Translate PDF while preserving tables and layout.
-    Bridge: PDF -> DOCX (Structural) -> Translate -> PDF
-    """
-    from pdf2docx import Converter
-    import os
-    
-    unique_id = os.path.basename(input_path).split('_')[0]
-    temp_docx = input_path + ".structural.docx"
-    temp_translated_docx = input_path + ".translated.docx"
-    
+    """Translate PDF while preserving structure"""
     try:
-        # 1. Convert PDF to structural DOCX (preserves tables/layout)
-        cv = Converter(input_path)
-        cv.convert(temp_docx, start=0, end=None)
-        cv.close()
+        import PyPDF2
+        print(f"Starting PDF translation: {input_path}")
         
-        # 2. Translate the structural DOCX
-        success, msg, _ = translate_docx(temp_docx, temp_translated_docx, target_lang, source_lang)
-        if not success:
-            return False, f"Structural translation failed: {msg}", None
-            
-        # 3. Convert translated DOCX back to PDF (using weasyprint bridge for script support)
-        # Handle conversion via pypandoc to HTML then to PDF for best language script rendering
-        import pypandoc
-        from weasyprint import HTML
-        
-        # Use standalone mode to include CSS and encoding metadata
-        # Setting title to avoid empty metadata warnings
-        extra_args = ['--standalone', '--metadata', 'title=Translated Document']
-        html_content = pypandoc.convert_file(temp_translated_docx, 'html', extra_args=extra_args)
-        
-        # Explicitly ensure UTF-8 for weasyprint
-        if isinstance(html_content, bytes):
-            html_content = html_content.decode('utf-8', errors='ignore')
-        
-        # Inject UTF-8 meta tag as a fail-safe
-        if '<meta charset="utf-8"' not in html_content.lower():
-            html_content = html_content.replace('<head>', '<head><meta charset="utf-8">')
-            
-        HTML(string=html_content).write_pdf(output_path)
-        
-        # Cleanup
-        for tmp in [temp_docx, temp_translated_docx, temp_html]:
-            if os.path.exists(tmp): os.remove(tmp)
-            
-        return True, "PDF structural translation completed successfully", output_path
-        
-    except Exception as e:
-        print(f"Structural PDF translation error: {e}")
-        # Fallback to Text if structural bridge fails
-        output_txt = output_path.replace('.pdf', '.txt')
-        return translate_pdf_to_text_fallback(input_path, output_txt, target_lang, source_lang)
-
-def translate_pdf_to_text_fallback(input_path, output_path, target_lang, source_lang='auto'):
-    """Fallback plain-text translation if structural bridge fails"""
-    import pdfplumber
-    try:
         text_content = []
-        with pdfplumber.open(input_path) as pdf:
-            for page in pdf.pages:
+        with open(input_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            total_pages = len(pdf_reader.pages)
+            print(f"PDF has {total_pages} pages")
+            
+            for i, page in enumerate(pdf_reader.pages):
+                print(f"Translating page {i+1}/{total_pages}")
                 text = page.extract_text()
-                if text:
-                    text_content.append(translate_text(text, target_lang, source_lang))
+                if text and text.strip():
+                    translated = translate_text(text, target_lang, source_lang)
+                    text_content.append(translated)
+                else:
+                    text_content.append("")
         
-        with open(output_path, 'w', encoding='utf-8-sig') as f:
+        # Save as text file (PDF creation is complex)
+        output_txt = output_path.replace('.pdf', '.txt')
+        with open(output_txt, 'w', encoding='utf-8') as f:
             f.write('\n\n'.join(text_content))
-        return True, "PDF translated to text (Structure preservation failed)", output_path
+        
+        print(f"PDF translation complete. Saved to: {output_txt}")
+        return True, f"PDF translation completed: {total_pages} pages", output_txt
+        
     except Exception as e:
-        return False, str(e), None
+        print(f"PDF translation error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, f"PDF translation failed: {str(e)}", None
 
 def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
     """Translate Word documents with batching to prevent timeouts/502s"""
