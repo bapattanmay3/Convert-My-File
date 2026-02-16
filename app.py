@@ -1,9 +1,13 @@
+# Standard library imports
 import os
 import uuid
+
+# Flask related imports
 from flask import Flask, render_template, request, jsonify, send_from_directory, flash, redirect, url_for
 from werkzeug.utils import secure_filename
-from converter_universal import convert_pdf_to_docx, convert_image_to_pdf, convert_docx_to_pdf, convert_image_to_image
-from translator_engine import LANGUAGES, translate_file
+
+# Note: heavy imports (translator_engine, converter_universal, etc.) 
+# are moved inside routes or after app initialization.
 
 app = Flask(__name__)
 app.config['SITE_NAME'] = 'Convert My File'
@@ -21,6 +25,7 @@ def converter():
 
 @app.route('/translator')
 def translator():
+    from translator_engine import LANGUAGES
     return render_template('translator.html', site_name=app.config['SITE_NAME'], languages=LANGUAGES)
 
 @app.route('/merger')
@@ -292,6 +297,8 @@ def convert_image():
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
     
     # Handle conversion
+    from converter_universal import convert_image_to_pdf, convert_image_to_image
+    
     if target_format == 'pdf':
         success, message = convert_image_to_pdf(input_path, output_path)
     else:
@@ -353,22 +360,26 @@ def translate_file_route():
         output_filename = os.path.basename(actual_output_path)
         
         if success and os.path.exists(actual_output_path):
-            # Verify the translation contains Hindi if target is Hindi
-            if target_lang[:2] == 'hi':
-                try:
-                    with open(actual_output_path, 'r', encoding='utf-8') as f:
-                        sample = f.read(1000)
-                        from translator_engine import is_valid_hindi
-                        if not is_valid_hindi(sample):
-                            try:
-                                print("WARNING: Translation may not contain valid Hindi")
-                            except UnicodeEncodeError:
-                                pass
-                except Exception as ve:
+            # Verify the translation is valid for the target language
+            try:
+                with open(actual_output_path, 'r', encoding='utf-8') as f:
+                    translated_sample = f.read(1000)
+                
+                with open(input_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    # Note: For non-text files, this might be garbled, but that's okay for similarity check
+                    original_sample = f.read(1000) 
+                
+                from translator_engine import is_valid_translation
+                if not is_valid_translation(translated_sample, target_lang, original_sample):
                     try:
-                        print(f"Validation warning: {ve}")
+                        print(f"WARNING: Translation to {target_lang} may be invalid or same as original")
                     except UnicodeEncodeError:
                         pass
+            except Exception as ve:
+                try:
+                    print(f"Validation warning: {ve}")
+                except UnicodeEncodeError:
+                    pass
             
             return jsonify({
                 'success': True,

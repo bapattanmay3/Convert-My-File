@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# exit on error
-set -o errexit
+# render-build.sh - Forces pip install to run and succeed
 
-# Install dependencies
+set -e  # exit on error
+
+echo "Installing dependencies with pip..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Any other build steps (e.g. compiling assets)
+echo "Build script completed successfully."
