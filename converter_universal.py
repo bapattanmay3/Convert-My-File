@@ -83,6 +83,14 @@ def get_PIL():
         _PIL = Image
     return _PIL
 
+_markdown = None
+def get_markdown():
+    global _markdown
+    if _markdown is None:
+        import markdown
+        _markdown = markdown.markdown
+    return _markdown
+
 # ============ PDF CONVERSIONS ============
 
 def convert_pdf_to_docx(input_path, output_path):
@@ -594,6 +602,46 @@ def convert_txt_to_docx(input_path, output_path):
     except Exception as e:
         return False, str(e)
 
+# ============ MARKDOWN CONVERSIONS ============
+
+def convert_md_to_html(input_path, output_path):
+    """Markdown to HTML"""
+    try:
+        markdown = get_markdown()
+        with open(input_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+        html = f"<html><body>{markdown(text)}</body></html>"
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html)
+        return True, "Markdown to HTML conversion successful"
+    except Exception as e:
+        return False, str(e)
+
+def convert_md_to_pdf(input_path, output_path):
+    """Markdown to PDF via HTML bridge"""
+    try:
+        temp_html = input_path + ".temp.html"
+        success, msg = convert_md_to_html(input_path, temp_html)
+        if success:
+            HTML = get_weasyprint()
+            HTML(temp_html).write_pdf(output_path)
+            if os.path.exists(temp_html): os.remove(temp_html)
+            return True, "Markdown to PDF conversion successful"
+        return False, msg
+    except Exception as e:
+        return False, str(e)
+
+# ============ HTML CONVERSIONS ============
+
+def convert_html_to_pdf(input_path, output_path):
+    """HTML to PDF"""
+    try:
+        HTML = get_weasyprint()
+        HTML(input_path).write_pdf(output_path)
+        return True, "HTML to PDF conversion successful"
+    except Exception as e:
+        return False, str(e)
+
 # ============ CONVERSION DISPATCHER ============
 
 FILE_CONVERSIONS = {
@@ -653,6 +701,16 @@ FILE_CONVERSIONS = {
     'txt': {
         'pdf': convert_txt_to_pdf,
         'docx': convert_txt_to_docx,
+    },
+    # Markdown Conversions
+    'md': {
+        'html': convert_md_to_html,
+        'pdf': convert_md_to_pdf,
+        'docx': lambda i,o: convert_docx_to_pdf(i,o), # Placeholder bridge or direct if needed
+    },
+    # HTML Conversions
+    'html': {
+        'pdf': convert_html_to_pdf,
     },
     # Image bridges (if called via universal converter)
     'jpg': { 'pdf': convert_image_to_pdf, 'png': lambda i,o: convert_image_to_image(i,o,'png'), 'webp': lambda i,o: convert_image_to_image(i,o,'webp'), 'jpeg': lambda i,o: convert_image_to_image(i,o,'jpeg') },

@@ -25,8 +25,9 @@
                 <div class="upload-content">
                     <span class="upload-icon">📁</span>
                     <h3>Drag & Drop or Click to Upload</h3>
-                    <p>Supported: PDF, DOCX, TXT (Max 50MB)</p>
-                    <input type="file" id="fileInput" accept=".pdf,.docx,.txt" hidden>
+                    <p>Supported: PDF, DOCX, TXT, MD, XLS, XLSX, PPT, PPTX, CSV, JSON, XML (Max 50MB)</p>
+                    <input type="file" id="fileInput"
+                        accept=".pdf,.docx,.doc,.txt,.md,.xls,.xlsx,.ppt,.pptx,.csv,.json,.xml,.html" hidden>
                     <button class="btn-premium" style="padding: 10px 25px;" id="fileBrowseBtn">Choose File</button>
                 </div>
             </div>
@@ -323,7 +324,9 @@
             'json': ['csv', 'xlsx', 'xml'],
             'pptx': ['pdf', 'txt'],
             'ppt': ['pdf', 'txt', 'pptx'],
-            'txt': ['pdf', 'docx']
+            'txt': ['pdf', 'docx'],
+            'md': ['pdf', 'html', 'docx'],
+            'html': ['pdf']
         };
 
         // Update when file is selected

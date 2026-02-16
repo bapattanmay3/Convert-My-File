@@ -9,5 +9,8 @@ pdf2image==1.16.3
 openpyxl==3.1.2
 deep-translator==1.11.4
 translators==5.5.3
+pandas>=2.0.0
+weasyprint>=60.0
+markdown>=3.4.0
 pdfplumber>=0.10.3
 python-dotenv>=1.0.0
