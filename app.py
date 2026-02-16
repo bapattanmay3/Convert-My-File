@@ -308,7 +308,7 @@ def convert_image():
         return jsonify({'success': False, 'error': message}), 500
 
 @app.route('/translate', methods=['POST'])
-def translate_file():
+def translate_file_route():
     """Translate uploaded documents with robust error handling"""
     try:
         if 'file' not in request.files:
@@ -345,24 +345,48 @@ def translate_file():
         from translator_engine import translate_document
         
         # Translate with timeout
-        success, message = translate_document(
+        success, message, actual_output_path = translate_document(
             input_path, output_path, target_lang, source_lang, file_ext
         )
         
-        if success and os.path.exists(output_path):
+        # Update output_filename to reflect any extension changes (e.g., .pdf -> .txt)
+        output_filename = os.path.basename(actual_output_path)
+        
+        if success and os.path.exists(actual_output_path):
+            # Verify the translation contains Hindi if target is Hindi
+            if target_lang[:2] == 'hi':
+                try:
+                    with open(actual_output_path, 'r', encoding='utf-8') as f:
+                        sample = f.read(1000)
+                        from translator_engine import is_valid_hindi
+                        if not is_valid_hindi(sample):
+                            try:
+                                print("WARNING: Translation may not contain valid Hindi")
+                            except UnicodeEncodeError:
+                                pass
+                except Exception as ve:
+                    try:
+                        print(f"Validation warning: {ve}")
+                    except UnicodeEncodeError:
+                        pass
+            
             return jsonify({
                 'success': True,
                 'message': message,
                 'download_url': f'/download/{output_filename}',
-                'filename': output_filename
+                'filename': output_filename,
+                'preview_filename': output_filename
             })
         else:
             return jsonify({'success': False, 'error': message or 'Translation failed'}), 500
             
     except Exception as e:
-        print(f"Translation route error: {e}")
-        import traceback
-        traceback.print_exc()
+        try:
+            print(f"Translation route error: {e}")
+            import traceback
+            traceback.print_exc()
+        except UnicodeEncodeError:
+            pass
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/get-preview/<filename>')

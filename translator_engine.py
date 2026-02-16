@@ -1,11 +1,37 @@
 import os
 import re
 import time
-import PyPDF2
+import pdfplumber
+import translators as ts
 from deep_translator import GoogleTranslator
 from docx import Document
 import openpyxl
 import csv
+
+# ===== GLOBAL LANGUAGES CONSTANT =====
+LANGUAGES = {
+    'af': 'Afrikaans', 'sq': 'Albanian', 'am': 'Amharic', 'ar': 'Arabic', 'hy': 'Armenian',
+    'az': 'Azerbaijani', 'eu': 'Basque', 'be': 'Belarusian', 'bn': 'Bengali', 'bs': 'Bosnian',
+    'bg': 'Bulgarian', 'ca': 'Catalan', 'ceb': 'Cebuano', 'ny': 'Chichewa', 'zh-cn': 'Chinese (Simplified)',
+    'zh-tw': 'Chinese (Traditional)', 'co': 'Corsican', 'hr': 'Croatian', 'cs': 'Czech', 'da': 'Danish',
+    'nl': 'Dutch', 'en': 'English', 'eo': 'Esperanto', 'et': 'Estonian', 'tl': 'Filipino',
+    'fi': 'Finnish', 'fr': 'French', 'fy': 'Frisian', 'gl': 'Galician', 'ka': 'Georgian',
+    'de': 'German', 'el': 'Greek', 'gu': 'Gujarati', 'ht': 'Haitian Creole', 'ha': 'Hausa',
+    'haw': 'Hawaiian', 'iw': 'Hebrew', 'hi': 'Hindi', 'hmn': 'Hmong', 'hu': 'Hungarian',
+    'is': 'Icelandic', 'ig': 'Igbo', 'id': 'Indonesian', 'ga': 'Irish', 'it': 'Italian',
+    'ja': 'Japanese', 'jw': 'Javanese', 'kn': 'Kannada', 'kk': 'Kazakh', 'km': 'Khmer',
+    'ko': 'Korean', 'ku': 'Kurdish (Kurmanji)', 'ky': 'Kyrgyz', 'lo': 'Lao', 'la': 'Latin',
+    'lv': 'Latvian', 'lt': 'Lithuanian', 'lb': 'Luxembourgish', 'mk': 'Macedonian', 'mg': 'Malagasy',
+    'ms': 'Malay', 'ml': 'Malayalam', 'mt': 'Maltese', 'mi': 'Maori', 'mr': 'Marathi',
+    'mn': 'Mongolian', 'my': 'Myanmar (Burmese)', 'ne': 'Nepali', 'no': 'Norwegian', 'ps': 'Pashto',
+    'fa': 'Persian', 'pl': 'Polish', 'pt': 'Portuguese', 'pa': 'Punjabi', 'ro': 'Romanian',
+    'ru': 'Russian', 'sm': 'Samoan', 'gd': 'Scots Gaelic', 'sr': 'Serbian', 'st': 'Sesotho',
+    'sn': 'Shona', 'sd': 'Sindhi', 'si': 'Sinhala', 'sk': 'Slovak', 'sl': 'Slovenian',
+    'so': 'Somali', 'es': 'Spanish', 'su': 'Sundanese', 'sw': 'Swahili', 'sv': 'Swedish',
+    'tg': 'Tajik', 'ta': 'Tamil', 'te': 'Telugu', 'th': 'Thai', 'tr': 'Turkish',
+    'uk': 'Ukrainian', 'ur': 'Urdu', 'uz': 'Uzbek', 'vi': 'Vietnamese', 'cy': 'Welsh',
+    'xh': 'Xhosa', 'yi': 'Yiddish', 'yo': 'Yoruba', 'zu': 'Zulu'
+}
 
 # ===== ENTITY PRESERVATION PATTERNS =====
 PRESERVE_PATTERNS = [
@@ -20,6 +46,25 @@ PRESERVE_PATTERNS = [
     r'^\$\s*\d+(\.\d{2})?$',                 # Prices
     r'^\d+(\.\d{1,2})?%$',                   # Percentages
 ]
+
+def clean_text(text):
+    """Normalize text by removing redundant whitespace and fixing spaced-out PDF text"""
+    if not text: return ""
+    # Replace null bytes
+    text = text.replace('\x00', '')
+    
+    # Handle spaced-out text (e.g. "P r o t e c t e d") which confuses translators
+    # Heuristic: If we see a pattern of [Letter][Space][Letter][Space]
+    if len(text) > 10:
+        # Use regex to find sequences of single letters separated by spaces
+        # e.g., "H e l l o" -> "Hello"
+        spaced_pattern = r'(?:(?<=\s)|(?<=^))([a-zA-Z0-9])\s+(?=([a-zA-Z0-9])(?:\s|$))'
+        # Group 1 is the character. We replace the character + space with just the character.
+        text = re.sub(spaced_pattern, r'\1', text)
+    
+    # Final normalization
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
 
 def should_preserve(text):
     """Check if text should be kept as-is (not translated)"""
@@ -38,13 +83,21 @@ def should_preserve(text):
         return True
     return False
 
-# ===== FIXED TRANSLATE FUNCTION WITH CHUNKING AND RETRY =====
+# ===== TRANSLATE FUNCTION USING TRANSLATORS LIBRARY =====
 def translate_text(text, target_lang, source_lang='auto', max_retries=3):
-    """Safe translation with chunking and retry logic"""
-    if should_preserve(text):
+    """Safe translation with UTF-8 preservation"""
+    if not text or should_preserve(text):
         return text
     
-    # Split long text into smaller chunks (Google limit ~5000 chars)
+    # Ensure text is properly encoded
+    if isinstance(text, bytes):
+        text = text.decode('utf-8', errors='ignore')
+    
+    # Normalize text (keeping my de-spacing logic too as it proved useful)
+    text = clean_text(text)
+    
+    target = target_lang[:2] # Ensure we use 2-char code for deep-translator
+    
     chunk_size = 4000
     chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
     translated_chunks = []
@@ -52,50 +105,77 @@ def translate_text(text, target_lang, source_lang='auto', max_retries=3):
     for chunk in chunks:
         for attempt in range(max_retries):
             try:
-                translator = GoogleTranslator(source=source_lang, target=target_lang[:2])
+                translator = GoogleTranslator(source=source_lang, target=target)
                 result = translator.translate(chunk)
                 if result:
+                    # Force UTF-8
+                    if isinstance(result, str):
+                        result = result.encode('utf-8').decode('utf-8')
                     translated_chunks.append(result)
                     break
                 time.sleep(1)
             except Exception as e:
-                print(f"Translation attempt {attempt+1} failed: {e}")
+                try:
+                    print(f"Translation attempt {attempt+1} failed: {e}")
+                except UnicodeEncodeError:
+                    pass
                 if attempt == max_retries - 1:
-                    translated_chunks.append(chunk)  # Fallback to original
+                    # Fallback with UTF-8 encoding
+                    fallback = chunk.encode('utf-8').decode('utf-8')
+                    translated_chunks.append(fallback)
                 time.sleep(2)
     
     return ' '.join(translated_chunks)
 
-# ===== PDF TRANSLATOR =====
+def is_valid_hindi(text):
+    """Check if text contains valid Hindi characters"""
+    if not text:
+        return False
+    # Hindi Unicode range: \u0900-\u097F
+    hindi_chars = sum(1 for c in text if '\u0900' <= c <= '\u097F')
+    return hindi_chars > len(text) * 0.3  # At least 30% Hindi chars
+
+# ===== PDF TRANSLATOR (pdfplumber) =====
 def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate PDF while preserving structure"""
+    """Translate PDF using pdfplumber for cleaner text extraction"""
     try:
         text_content = []
-        with open(input_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
-            total_pages = len(pdf_reader.pages)
-            
-            for i, page in enumerate(pdf_reader.pages):
-                print(f"Translating page {i+1}/{total_pages}")
+        # Update output path early for consistency
+        output_txt = output_path if output_path.endswith('.txt') else output_path.replace('.pdf', '.txt')
+        
+        with pdfplumber.open(input_path) as pdf:
+            total_pages = len(pdf.pages)
+            for i, page in enumerate(pdf.pages):
+                try:
+                    print(f"Translating page {i+1}/{total_pages}")
+                except UnicodeEncodeError:
+                    pass
+                
                 text = page.extract_text()
                 if text and text.strip():
                     translated = translate_text(text, target_lang, source_lang)
+                    # Force UTF-8 encoding check for reliability
+                    if isinstance(translated, str):
+                        translated = translated.encode('utf-8', errors='ignore').decode('utf-8')
                     text_content.append(translated)
                 else:
                     text_content.append("")
         
-        output_txt = output_path.replace('.pdf', '.txt')
-        with open(output_txt, 'w', encoding='utf-8') as f:
+        # Write translated text with UTF-8 BOM for better Windows compatibility
+        with open(output_txt, 'w', encoding='utf-8-sig') as f:
             f.write('\n\n'.join(text_content))
-        
-        return True, f"PDF translation completed: {total_pages} pages"
+            
+        return True, f"PDF translation completed: {total_pages} pages", output_txt
     except Exception as e:
-        print(f"PDF translation error: {e}")
-        return False, str(e)
+        try:
+            print(f"PDF translation error: {e}")
+        except UnicodeEncodeError:
+            print(f"PDF translation error: [Unicode Error]")
+        return False, str(e), output_path
 
 # ===== WORD DOCUMENT TRANSLATOR =====
 def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate Word document preserving tables and formatting"""
+    """Translate Word document preserving structure"""
     try:
         doc = Document(input_path)
         for para in doc.paragraphs:
@@ -116,7 +196,7 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
 
 # ===== EXCEL TRANSLATOR =====
 def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate Excel files preserving all sheets and structure"""
+    """Translate Excel files preserving structure"""
     try:
         wb = openpyxl.load_workbook(input_path)
         for sheet_name in wb.sheetnames:
@@ -136,21 +216,23 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
 def translate_csv(input_path, output_path, target_lang, source_lang='auto'):
     """Translate CSV files"""
     try:
-        with open(input_path, 'r', encoding='utf-8') as infile:
+        with open(input_path, 'r', encoding='utf-8-sig') as infile:
             reader = csv.reader(infile)
-            rows = []
-            for row in reader:
-                new_row = []
-                for cell in row:
-                    if should_preserve(cell):
-                        new_row.append(cell)
-                    else:
-                        new_row.append(translate_text(cell, target_lang, source_lang))
-                rows.append(new_row)
+            rows = list(reader)
         
-        with open(output_path, 'w', newline='', encoding='utf-8') as outfile:
+        translated_rows = []
+        for row in rows:
+            new_row = []
+            for cell in row:
+                if should_preserve(cell):
+                    new_row.append(cell)
+                else:
+                    new_row.append(translate_text(cell, target_lang, source_lang))
+            translated_rows.append(new_row)
+            
+        with open(output_path, 'w', newline='', encoding='utf-8-sig') as outfile:
             writer = csv.writer(outfile)
-            writer.writerows(rows)
+            writer.writerows(translated_rows)
         return True, "CSV translation completed"
     except Exception as e:
         return False, str(e)
@@ -159,12 +241,12 @@ def translate_csv(input_path, output_path, target_lang, source_lang='auto'):
 def translate_text_file(input_path, output_path, target_lang, source_lang='auto'):
     """Translate plain text files"""
     try:
-        with open(input_path, 'r', encoding='utf-8') as f:
+        with open(input_path, 'r', encoding='utf-8-sig') as f:
             content = f.read()
         
         translated = translate_text(content, target_lang, source_lang)
         
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, 'w', encoding='utf-8-sig') as f:
             f.write(translated)
         return True, "Text translation completed"
     except Exception as e:
@@ -172,11 +254,12 @@ def translate_text_file(input_path, output_path, target_lang, source_lang='auto'
 
 # ===== MAIN DISPATCHER FUNCTION =====
 def translate_document(input_path, output_path, target_lang, source_lang='auto', file_ext=None):
-    """Main dispatcher function - THIS IS WHAT app.py CALLS"""
+    """Main dispatcher for document translation"""
     if file_ext is None:
         file_ext = os.path.splitext(input_path)[1].lower()
     
-    translators = {
+    # Map extensions to translator functions
+    translators_map = {
         '.pdf': translate_pdf,
         '.docx': translate_docx,
         '.doc': translate_docx,
@@ -186,8 +269,17 @@ def translate_document(input_path, output_path, target_lang, source_lang='auto',
         '.txt': translate_text_file,
     }
     
-    translator = translators.get(file_ext)
-    if translator:
-        return translator(input_path, output_path, target_lang, source_lang)
+    translator_func = translators_map.get(file_ext)
+    if translator_func:
+        # For PDF, the output is always TXT in this basic engine (unless using premium tools)
+        if file_ext == '.pdf':
+            output_path = output_path.replace('.pdf', '.txt')
+            
+        success, message = translator_func(input_path, output_path, target_lang, source_lang)
+        return success, message, output_path
     else:
-        return False, f"Unsupported file type: {file_ext}"
+        return False, f"Unsupported file type: {file_ext}", output_path
+
+# Backward compatibility (some files might still call translate_file)
+def translate_file(input_path, output_path, target_lang, source_lang='auto'):
+    return translate_document(input_path, output_path, target_lang, source_lang)
