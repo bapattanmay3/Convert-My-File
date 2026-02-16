@@ -273,16 +273,30 @@
                     method: 'POST',
                     body: formData
                 });
-                const data = await response.json();
 
                 statusMsg.style.display = 'none';
 
-                if (data.success) {
-                    lastResultFilename = data.preview_filename;
-                    downloadLink.href = data.download_url;
-                    resultArea.style.display = 'block';
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        lastResultFilename = data.preview_filename;
+                        downloadLink.href = data.download_url;
+                        resultArea.style.display = 'block';
+                    } else {
+                        errorMsg.innerHTML = `❌ <b>Translation Error:</b> ${data.error || 'Unknown failure'}`;
+                        errorMsg.style.display = 'block';
+                        fileInfo.style.display = 'block';
+                        translateOptions.style.display = 'block';
+                    }
                 } else {
-                    errorMsg.innerHTML = `❌ <b>Translation Error:</b> ${data.error || 'Unknown failure'}<br><small style="opacity: 0.7">Status: ${response.status} ${response.statusText}</small>`;
+                    let errorText = 'Server Error';
+                    try {
+                        const data = await response.json();
+                        errorText = data.error || errorText;
+                    } catch (e) {
+                        errorText = `${response.status} ${response.statusText}`;
+                    }
+                    errorMsg.innerHTML = `❌ <b>Network error:</b> ${errorText}<br><small style="opacity: 0.7">The server might be busy. Please try again or wait a moment.</small>`;
                     errorMsg.style.display = 'block';
                     fileInfo.style.display = 'block';
                     translateOptions.style.display = 'block';

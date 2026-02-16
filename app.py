@@ -493,17 +493,23 @@ def get_preview(filename):
             return jsonify({'success': True, 'content': content[:10000], 'type': 'text'})
             
         elif ext in ['xlsx', 'xls']:
-            import openpyxl
-            wb = openpyxl.load_workbook(file_path, data_only=True)
-            content = []
-            for sheet in wb.worksheets[:1]: # Sample first sheet
-                for row in sheet.iter_rows(max_row=50, max_col=10, values_only=True):
-                    content.append("\t".join([str(c) if c is not None else "" for c in row]))
-            return jsonify({'success': True, 'content': "\n".join(content)[:10000], 'type': 'text'})
+            try:
+                import openpyxl
+                # excel preview only for modern or bridged files
+                wb = openpyxl.load_workbook(file_path, data_only=True)
+                content = []
+                for sheet in wb.worksheets[:1]: # Sample first sheet
+                    for row in sheet.iter_rows(max_row=50, max_col=10, values_only=True):
+                        content.append("\t".join([str(c) if c is not None else "" for c in row]))
+                return jsonify({'success': True, 'content': "\n".join(content)[:10000], 'type': 'text'})
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Excel preview failed: {str(e)}'})
             
         return jsonify({'success': False, 'error': f'Preview not available for {ext} format'})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Preview system error: {str(e)}'})
 
 @app.route('/download/<filename>')
 def download_file(filename):

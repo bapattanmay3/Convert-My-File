@@ -251,13 +251,12 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
         from docx import Document
         doc = Document(input_path)
         
-        # Helper to process a batch of text
         def process_batch(paragraphs, current_batch_text, batch_indices):
             if not current_batch_text:
                 return
             
             # Combine batch with a unique separator that's unlikely to be in text
-            separator = " ||| "
+            separator = " [[[DSEP]]] "
             combined_text = separator.join(current_batch_text)
             
             translated_combined = translate_text(combined_text, target_lang, source_lang)
@@ -268,9 +267,14 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
                 for idx, trans in zip(batch_indices, translated_parts):
                     paragraphs[idx].text = trans.strip()
             else:
-                # Fallback: translate individually if batching fails to preserve structure
+                # Fallback: translate individually if batching fails
                 for idx in batch_indices:
-                    paragraphs[idx].text = translate_text(paragraphs[idx].text, target_lang, source_lang)
+                    try:
+                        paragraphs[idx].text = translate_text(paragraphs[idx].text, target_lang, source_lang).strip()
+                    except: pass
+            
+            # Anti-throttle breather
+            time.sleep(0.5)
 
         # 1. Translate Main Paragraphs in Batches
         all_paras = list(doc.paragraphs)
@@ -306,20 +310,22 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
                         cell_refs.append(cell)
                 
                 if table_batch:
-                    separator = " ||| "
+                    separator = " [[[TSEP]]] "
                     combined = separator.join(table_batch)
                     translated_combined = translate_text(combined, target_lang, source_lang)
                     translated_parts = translated_combined.split(separator)
                     
                     if len(translated_parts) == len(cell_refs):
                         for cell, part in zip(cell_refs, translated_parts):
-                            # Clear old text and set new while preserving formatting if possible
-                            # Note: cell.text = ... replaces all content
                             cell.text = part.strip()
                     else:
-                        # Fallback
                         for cell in cell_refs:
-                            cell.text = translate_text(cell.text, target_lang, source_lang)
+                            try:
+                                cell.text = translate_text(cell.text, target_lang, source_lang).strip()
+                            except: pass
+                    
+                    # Anti-throttle breather
+                    time.sleep(0.5)
         
         doc.save(output_path)
         return True, "Word document translation completed"
@@ -330,17 +336,37 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
         return False, str(e)
 
 def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate Excel files with batching to avoid timeouts"""
+    """Translate Excel files with batching and legacy .xls support"""
+    import os
+    file_ext = os.path.splitext(input_path)[1].lower()
+    temp_xlsx = None
+    
     try:
         import openpyxl
-        wb = openpyxl.load_workbook(input_path)
+        import pandas as pd
+        
+        # Bridge legacy .xls to .xlsx
+        if file_ext == '.xls':
+            temp_xlsx = input_path + ".bridge.xlsx"
+            # Read all sheets from .xls and save to .xlsx
+            with pd.ExcelWriter(temp_xlsx, engine='openpyxl') as writer:
+                # Use xlrd engine for old .xls
+                xls_data = pd.read_excel(input_path, sheet_name=None, engine='xlrd')
+                for sheet_name, df in xls_data.items():
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+            current_input = temp_xlsx
+        else:
+            current_input = input_path
+
+        wb = openpyxl.load_workbook(current_input)
         
         # 1. Collect all translatable cells
         cells_to_translate = []
         for sheet in wb.worksheets:
             for row in sheet.iter_rows():
                 for cell in row:
-                    if cell.value and isinstance(cell.value, str):
+                    # Only translate strings, ignore formulas and None
+                    if cell.value and isinstance(cell.value, str) and not cell.data_type == 'f':
                         text = cell.value.strip()
                         if text and not should_preserve(text):
                             cells_to_translate.append((cell, text))
@@ -352,7 +378,8 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
             current_len = 0
             
             def process_excel_batch(texts, cells):
-                sep = " ||| "
+                # Unique separator that is unlikely to be mangled by translation
+                sep = " [[[XSEP]]] "
                 combined = sep.join(texts)
                 translated = translate_text(combined, target_lang, source_lang)
                 parts = translated.split(sep)
@@ -361,16 +388,22 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
                     for cell, trans in zip(cells, parts):
                         cell.value = trans.strip()
                 else:
-                    # Fallback
+                    # Individual fallback if separator fails
                     for cell in cells:
-                        cell.value = translate_text(cell.value, target_lang, source_lang)
+                        try:
+                            cell.value = translate_text(str(cell.value), target_lang, source_lang)
+                        except: pass
+                
+                # Small breather to avoid API rate limiting/timeouts
+                time.sleep(0.5)
 
             for cell, text in cells_to_translate:
                 current_batch_texts.append(text)
                 current_batch_cells.append(cell)
                 current_len += len(text)
                 
-                if current_len > 2500 or len(current_batch_texts) >= 30:
+                # Smaller batches for stability
+                if current_len > 2000 or len(current_batch_texts) >= 20:
                     process_excel_batch(current_batch_texts, current_batch_cells)
                     current_batch_texts, current_batch_cells, current_len = [], [], 0
             
@@ -379,10 +412,17 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
                 process_excel_batch(current_batch_texts, current_batch_cells)
         
         wb.save(output_path)
+        
+        # Cleanup bridge
+        if temp_xlsx and os.path.exists(temp_xlsx):
+            os.remove(temp_xlsx)
+            
         return True, "Excel translation completed"
     except Exception as e:
+        if temp_xlsx and os.path.exists(temp_xlsx):
+            os.remove(temp_xlsx)
         print(f"Excel translation error: {e}")
-        return False, str(e)
+        return False, f"Excel error: {str(e)}"
 
 def translate_csv(input_path, output_path, target_lang, source_lang='auto'):
     """Translate CSV files with row-based batching"""
