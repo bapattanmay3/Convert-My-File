@@ -3,7 +3,7 @@ services:
     name: convert-my-file
     runtime: docker
     plan: free
-    startCommand: "gunicorn --bind 0.0.0.0:10000 --timeout 120 app:app"
+    startCommand: "gunicorn --bind 0.0.0.0:10000 --workers 1 --threads 4 --timeout 300 --preload app:app"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
