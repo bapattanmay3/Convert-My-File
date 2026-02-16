@@ -368,23 +368,28 @@ def translate_file_route():
         input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
         file.save(input_path)
         
-        # Generate output path
+        # Generate output path - PRESERVE ORIGINAL FILENAME
         file_ext = os.path.splitext(filename)[1].lower()
         base_name = os.path.splitext(filename)[0]
-        output_filename = f"translated_{unique_id}_{base_name}{file_ext}"
-        output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+        # Remove the internal unique_id from the download filename if present
+        # but keep it in the internal input_path for safety
+        output_filename = f"[Translated]_{filename}"
+        if file_ext == '.pdf':
+            # We now support PDF output directly
+            output_filename = f"[Translated]_{base_name}.pdf"
+            
+        output_path = os.path.join(app.config['UPLOAD_FOLDER'], f"trans_{unique_id}_{output_filename}")
         
         # Import translator function
         from translator_engine import translate_document
         
-        # Handle PDF to TXT conversion path early
-        if file_ext == '.pdf':
-            output_path = output_path.replace('.pdf', '.txt')
-            
         # Call the translator function
         result = translate_document(
             input_path, output_path, target_lang, source_lang, file_ext
         )
+        
+        # After translation, if it succeeded, we want the client to download it with our clean name
+        download_name = output_filename 
 
         # Handle both 2-value and 3-value returns
         if isinstance(result, tuple) and len(result) == 2:
@@ -428,9 +433,9 @@ def translate_file_route():
             return jsonify({
                 'success': True,
                 'message': message,
-                'download_url': f'/download/{output_filename}',
-                'filename': output_filename,
-                'preview_filename': output_filename
+                'download_url': f'/download/{os.path.basename(output_path)}?display_name={download_name}',
+                'filename': download_name,
+                'preview_filename': os.path.basename(output_path)
             })
         else:
             return jsonify({'success': False, 'error': message or 'Translation failed'}), 500
