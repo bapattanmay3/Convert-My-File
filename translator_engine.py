@@ -271,11 +271,13 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
             combined_text = separator.join(current_batch_text)
             
             translated_combined = translate_text(combined_text, target_lang, source_lang)
-            translated_parts = translated_combined.split(separator)
+            # Robust split using regex to handle extra spaces added by translator
+            # Pattern matches [[[DSEP]]] with any number of surrounding spaces
+            parts = re.split(r'\s*\[\[\[DSEP\]\]\]\s*', translated_combined)
             
             # If split count matches, apply translations
-            if len(translated_parts) == len(batch_indices):
-                for idx, trans in zip(batch_indices, translated_parts):
+            if len(parts) == len(batch_indices):
+                for idx, trans in zip(batch_indices, parts):
                     paragraphs[idx].text = trans.strip()
             else:
                 # Fallback: translate individually if batching fails
@@ -392,8 +394,9 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
                 # Unique separator that is unlikely to be mangled by translation
                 sep = " [[[XSEP]]] "
                 combined = sep.join(texts)
-                translated = translate_text(combined, target_lang, source_lang)
-                parts = translated.split(sep)
+                # Robust split using regex to handle extra spaces added by translator
+                # Pattern matches [[[XSEP]]] with any number of surrounding spaces
+                parts = re.split(r'\s*\[\[\[XSEP\]\]\]\s*', translated)
                 
                 if len(parts) == len(cells):
                     for cell, trans in zip(cells, parts):
