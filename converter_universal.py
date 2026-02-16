@@ -363,14 +363,17 @@ def convert_image_to_pdf(input_path, output_path):
         return False, str(e)
 
 def convert_pdf_to_image(input_path, output_path, target_format='png'):
-    """PDF to Image (first page only)"""
+    """PDF to Image (multi-page support or first page)"""
     try:
         from pdf2image import convert_from_path
+        # On Windows, poppler must be in PATH. On Render, it's usually pre-installed in common images.
         images = convert_from_path(input_path, first_page=1, last_page=1)
-        images[0].save(output_path, target_format.upper())
-        return True, f"PDF to {target_format.upper()} conversion successful"
+        if images:
+            images[0].save(output_path, target_format.upper())
+            return True, f"PDF to {target_format.upper()} conversion successful"
+        return False, "No pages found in PDF"
     except Exception as e:
-        return False, str(e)
+        return False, f"PDF to Image error: {str(e)}"
 
 # ============ PPTX CONVERSIONS ============
 
@@ -650,7 +653,12 @@ FILE_CONVERSIONS = {
     'txt': {
         'pdf': convert_txt_to_pdf,
         'docx': convert_txt_to_docx,
-    }
+    },
+    # Image bridges (if called via universal converter)
+    'jpg': { 'pdf': convert_image_to_pdf, 'png': lambda i,o: convert_image_to_image(i,o,'png'), 'webp': lambda i,o: convert_image_to_image(i,o,'webp'), 'jpeg': lambda i,o: convert_image_to_image(i,o,'jpeg') },
+    'jpeg': { 'pdf': convert_image_to_pdf, 'png': lambda i,o: convert_image_to_image(i,o,'png'), 'webp': lambda i,o: convert_image_to_image(i,o,'webp'), 'jpg': lambda i,o: convert_image_to_image(i,o,'jpg') },
+    'png': { 'pdf': convert_image_to_pdf, 'jpg': lambda i,o: convert_image_to_image(i,o,'jpg'), 'webp': lambda i,o: convert_image_to_image(i,o,'webp'), 'jpeg': lambda i,o: convert_image_to_image(i,o,'jpeg') },
+    'webp': { 'pdf': convert_image_to_pdf, 'jpg': lambda i,o: convert_image_to_image(i,o,'jpg'), 'png': lambda i,o: convert_image_to_image(i,o,'png'), 'jpeg': lambda i,o: convert_image_to_image(i,o,'jpeg') },
 }
 
 IMAGE_CONVERSIONS = {

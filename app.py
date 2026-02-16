@@ -38,7 +38,7 @@ def merger():
 
 @app.route('/merge', methods=['POST'])
 def merge_pdfs():
-    """Handle PDF merging"""
+    """Handle PDF and Image merging into a single PDF"""
     if 'files' not in request.files:
         flash('No files uploaded')
         return redirect(url_for('merger'))
@@ -49,18 +49,32 @@ def merge_pdfs():
         return redirect(url_for('merger'))
     
     from PyPDF2 import PdfMerger
-    merger = PdfMerger()
+    from PIL import Image
+    import io
     
+    merger = PdfMerger()
     unique_id = str(uuid.uuid4())
     temp_files = []
     
     try:
         for file in files:
             filename = secure_filename(file.filename)
+            ext = os.path.splitext(filename)[1].lower()
             temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"tmp_{unique_id}_{filename}")
             file.save(temp_path)
             temp_files.append(temp_path)
-            merger.append(temp_path)
+            
+            if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff']:
+                # Bridge: Convert image to temporary PDF for merging
+                img_pdf_path = temp_path + ".bridge.pdf"
+                img = Image.open(temp_path)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                img.save(img_pdf_path, "PDF")
+                merger.append(img_pdf_path)
+                temp_files.append(img_pdf_path)
+            else:
+                merger.append(temp_path)
         
         output_filename = f"merged_{unique_id}.pdf"
         output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
@@ -70,16 +84,22 @@ def merge_pdfs():
         
         merger.close()
         
-        # Cleanup temp files
+        # Comprehensive Cleanup
         for tmp in temp_files:
             try:
-                os.remove(tmp)
+                if os.path.exists(tmp):
+                    os.remove(tmp)
             except:
                 pass
                 
         return send_from_directory(app.config['UPLOAD_FOLDER'], output_filename, as_attachment=True)
     
     except Exception as e:
+        # Cleanup on failure
+        for tmp in temp_files:
+            try:
+                if os.path.exists(tmp): os.remove(tmp)
+            except: pass
         flash(f'Merging failed: {str(e)}')
         return redirect(url_for('merger'))
 
@@ -196,11 +216,13 @@ def compress():
                 
                 # Recalculate scale based on actual size result
                 # Ratio is sqrt(Target/Actual) because size is area-proportional
-                scale_adjustment = (target_bytes / current_size) ** 0.5
+                size_ratio = target_bytes / current_size
+                # Dampen the adjustment to avoid oscillations
+                scale_adjustment = (size_ratio ** 0.5) * 0.95 if size_ratio < 1 else (size_ratio ** 0.5)
                 current_scale *= scale_adjustment
                 
-                # Safety boundaries (0.1x to 4.0x original)
-                current_scale = max(0.05, min(8.0, current_scale))
+                # Safety boundaries (0.01x to 8.0x original)
+                current_scale = max(0.01, min(8.0, current_scale))
 
             # Final Save
             working_img.save(output_path, **test_params)
