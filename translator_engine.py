@@ -331,18 +331,40 @@ def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
             print(f"Translating sheet: {sheet_name}")
             
             for row in sheet.iter_rows():
+                # Collect translatable cells in this row
+                row_batch_cells = []
+                row_batch_texts = []
+                
                 for cell in row:
-                    # Skip formulas and only translate strings
                     if cell.value and isinstance(cell.value, str) and not cell.data_type == 'f':
                         original = cell.value.strip()
                         if original and len(original) > 1 and not should_preserve(original):
-                            translated = translate_text(original, target_lang, source_lang)
-                            if translated and translated != original:
-                                cell.value = translated
-                                translated_count += 1
-                                # Small breather to help avoid 429/502 on high count
-                                if translated_count % 5 == 0:
-                                    time.sleep(0.1)
+                            row_batch_cells.append(cell)
+                            row_batch_texts.append(original)
+                
+                if row_batch_texts:
+                    # Translate entire row as one batch
+                    separator = " [[[XSEP]]] "
+                    combined = separator.join(row_batch_texts)
+                    translated_combined = translate_text(combined, target_lang, source_lang)
+                    
+                    import re
+                    # Robust split using regex to handle potential extra spaces/newlines from translator
+                    parts = re.split(r'\s*\[\[\[XSEP\]\]\]\s*', translated_combined)
+                    
+                    if len(parts) == len(row_batch_cells):
+                        for cell, trans in zip(row_batch_cells, parts):
+                            cell.value = trans.strip()
+                            translated_count += 1
+                    else:
+                        # Fallback: translate individually if batch split fails
+                        print(f"Batch mismatch (row), falling back to individual cells")
+                        for cell in row_batch_cells:
+                            cell.value = translate_text(cell.value, target_lang, source_lang)
+                            translated_count += 1
+                    
+                    # Anti-throttle breather
+                    time.sleep(0.5)
         
         # Save the workbook
         wb.save(output_path)

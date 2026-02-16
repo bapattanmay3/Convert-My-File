@@ -486,7 +486,21 @@ def get_preview(filename):
             
         elif ext in ['docx', 'doc']:
             from docx import Document
-            doc = Document(file_path)
+            
+            # Legacy .doc preview bridge
+            if ext == 'doc':
+                try:
+                    import pypandoc
+                    temp_preview_docx = file_path + ".preview.docx"
+                    pypandoc.convert_file(file_path, 'docx', outputfile=temp_preview_docx)
+                    doc = Document(temp_preview_docx)
+                    if os.path.exists(temp_preview_docx):
+                        os.remove(temp_preview_docx)
+                except Exception as pe:
+                    return jsonify({'success': False, 'error': f'Legacy DOC preview conversion failed: {str(pe)}'})
+            else:
+                doc = Document(file_path)
+                
             full_text = []
             for para in doc.paragraphs:
                 full_text.append(para.text)
