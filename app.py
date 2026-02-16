@@ -19,6 +19,10 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 def home():
     return render_template('index.html', site_name=app.config['SITE_NAME'])
 
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
+
 @app.route('/converter')
 def converter():
     return render_template('converter.html', site_name=app.config['SITE_NAME'])
