@@ -366,7 +366,7 @@ def translate_file_route():
         if success and os.path.exists(output_path):
             # Verify the translation is valid for the target language
             try:
-                with open(actual_output_path, 'r', encoding='utf-8') as f:
+                with open(output_path, 'r', encoding='utf-8') as f:
                     translated_sample = f.read(1000)
                 
                 with open(input_path, 'r', encoding='utf-8', errors='ignore') as f:
