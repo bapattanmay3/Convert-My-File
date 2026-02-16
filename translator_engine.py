@@ -217,7 +217,7 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
         except Exception as ve:
             print(f"Verification step failed: {ve}")
             
-        return True, f"PDF translation completed: {total_pages} pages", output_txt
+        return True, f"PDF translation completed: {total_pages} pages"
     except Exception as e:
         try:
             print(f"PDF translation error: {e}")
@@ -225,7 +225,7 @@ def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
             traceback.print_exc()
         except UnicodeEncodeError:
             print(f"PDF translation error: [Unicode Error]")
-        return False, str(e), output_path
+        return False, str(e)
 
 # ===== WORD DOCUMENT TRANSLATOR =====
 def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
