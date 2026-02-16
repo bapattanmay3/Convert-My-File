@@ -88,11 +88,19 @@ def translate_text(text, target_lang, source_lang='auto', max_retries=3):
     if should_preserve(text):
         return text
     
-    # Ensure target_lang is valid
-    if len(target_lang) > 2:
-        target_lang = target_lang[:2]
-    
-    print(f"Translating to: {target_lang}, Text length: {len(text)}")
+    # Normalize language code
+    # GoogleTranslator handles 'zh-CN', 'zh-TW', etc.
+    # But for others, 2-letter is usually safer
+    target = target_lang.lower()
+    if '-' in target:
+        parts = target.split('-')
+        # Keep variants for Chinese, but for others (like pt-BR) sometimes 2-letter is enough
+        if parts[0] == 'zh':
+            target = f"{parts[0]}-{parts[1].upper()}"
+        else:
+            target = parts[0]
+            
+    print(f"Translating to: {target}, Text length: {len(text)}")
     
     chunk_size = 4000
     chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
@@ -101,7 +109,7 @@ def translate_text(text, target_lang, source_lang='auto', max_retries=3):
     for chunk in chunks:
         for attempt in range(max_retries):
             try:
-                translator = GoogleTranslator(source=source_lang, target=target_lang)
+                translator = GoogleTranslator(source=source_lang, target=target)
                 result = translator.translate(chunk)
                 if result:
                     translated_chunks.append(result)

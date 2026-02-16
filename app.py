@@ -445,12 +445,22 @@ def translate_file_route():
                 except UnicodeEncodeError:
                     pass
             
+        # Updated logic: Use the exact path returned by the engine
+        if success and res_path and os.path.exists(res_path):
+            # The engine might have changed the extension (e.g., .pdf -> .txt)
+            final_filename = os.path.basename(res_path)
+            
+            # Update download name if extension changed
+            final_ext = os.path.splitext(final_filename)[1].lower()
+            if final_ext != file_ext:
+                download_name = os.path.splitext(download_name)[0] + final_ext
+            
             return jsonify({
                 'success': True,
                 'message': message,
-                'download_url': f'/download/{internal_filename}?display_name={download_name}',
+                'download_url': f'/download/{final_filename}?display_name={download_name}',
                 'filename': download_name,
-                'preview_filename': internal_filename
+                'preview_filename': final_filename
             })
         else:
             return jsonify({'success': False, 'error': message or 'Translation failed'}), 500
@@ -503,17 +513,14 @@ def get_preview(filename):
             return jsonify({'success': True, 'content': content[:10000], 'type': 'text'})
             
         elif ext in ['xlsx', 'xls']:
-            try:
-                import openpyxl
-                # excel preview only for modern or bridged files
-                wb = openpyxl.load_workbook(file_path, data_only=True)
-                content = []
-                for sheet in wb.worksheets[:1]: # Sample first sheet
-                    for row in sheet.iter_rows(max_row=50, max_col=10, values_only=True):
-                        content.append("\t".join([str(c) if c is not None else "" for c in row]))
-                return jsonify({'success': True, 'content': "\n".join(content)[:10000], 'type': 'text'})
-            except Exception as e:
-                return jsonify({'success': False, 'error': f'Excel preview failed: {str(e)}'})
+            import pandas as pd
+            # Use pandas for robust support of both .xls and .xlsx
+            engine = 'xlrd' if ext == 'xls' else 'openpyxl'
+            df = pd.read_excel(file_path, nrows=50, engine=engine)
+            
+            # Simple tab-separated text representation for preview
+            content = df.to_csv(sep='\t', index=False)
+            return jsonify({'success': True, 'content': content[:10000], 'type': 'text'})
             
         return jsonify({'success': False, 'error': f'Preview not available for {ext} format'})
     except Exception as e:
