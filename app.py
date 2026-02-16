@@ -380,10 +380,10 @@ def translate_file_route():
         if success and os.path.exists(output_path):
             # Verify the translation is valid for the target language
             try:
-                with open(output_path, 'r', encoding='utf-8') as f:
+                with open(output_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
                     translated_sample = f.read(1000)
                 
-                with open(input_path, 'r', encoding='utf-8', errors='ignore') as f:
+                with open(input_path, 'r', encoding='utf-8-sig', errors='ignore') as f:
                     # Note: For non-text files, this might be garbled, but that's okay for similarity check
                     original_sample = f.read(1000) 
                 
@@ -454,6 +454,15 @@ def get_preview(filename):
                 for page_idx in range(min(len(reader.pages), 5)):
                     content += reader.pages[page_idx].extract_text() + "\n"
             return jsonify({'success': True, 'content': content[:10000], 'type': 'text'})
+            
+        elif ext in ['xlsx', 'xls']:
+            import openpyxl
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+            content = []
+            for sheet in wb.worksheets[:1]: # Sample first sheet
+                for row in sheet.iter_rows(max_row=50, max_col=10, values_only=True):
+                    content.append("\t".join([str(c) if c is not None else "" for c in row]))
+            return jsonify({'success': True, 'content': "\n".join(content)[:10000], 'type': 'text'})
             
         return jsonify({'success': False, 'error': f'Preview not available for {ext} format'})
     except Exception as e:

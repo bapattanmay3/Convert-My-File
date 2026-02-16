@@ -94,7 +94,14 @@ def translate_text(text, target_lang, source_lang='auto', max_retries=3):
     # Normalize text (keeping my de-spacing logic too as it proved useful)
     text = clean_text(text)
     
-    target = target_lang[:2] # Ensure we use 2-char code for deep-translator
+    # Special handling for language codes
+    target = target_lang
+    if '-' in target:
+        # e.g., zh-cn -> zh-CN for Google
+        parts = target.split('-')
+        target = f"{parts[0]}-{parts[1].upper()}"
+    elif target == 'iw':
+        target = 'he' # Standardize Hebrew
     
     chunk_size = 4000
     chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
