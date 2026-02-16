@@ -355,18 +355,24 @@ def translate_file_route():
         if file_ext == '.pdf':
             output_path = output_path.replace('.pdf', '.txt')
             
-        # Translate with timeout
+        # Call the translator function
         result = translate_document(
             input_path, output_path, target_lang, source_lang, file_ext
         )
-        try:
-            print(f"DEBUG - Return type: {type(result)}")
-            print(f"DEBUG - Return value: {result}")
-            print(f"DEBUG - Length: {len(result) if isinstance(result, tuple) else 'not tuple'}")
-        except:
-            pass
-            
-        success, message = result  # This will show the actual error
+
+        # Handle both 2-value and 3-value returns
+        if isinstance(result, tuple) and len(result) == 2:
+            success, message = result
+            preview_url = None
+        elif isinstance(result, tuple) and len(result) == 3:
+            success, message, preview_url = result
+        else:
+            # Log unexpected return
+            try:
+                print(f"Unexpected return from translate_document: {result}")
+            except UnicodeEncodeError:
+                print("Unexpected return from translate_document: [Unicode Content]")
+            return jsonify({'success': False, 'error': 'Internal server error'}), 500
         
         # Update output_filename for response
         output_filename = os.path.basename(output_path)
