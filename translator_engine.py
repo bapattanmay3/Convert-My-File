@@ -301,96 +301,106 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
         return False, str(e), None
 
 def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate Excel files preserving all sheets and formatting (User Robust Version)"""
+    """Translate Excel files with Global Dictionary Batching (Speed & RAM optimized)"""
     import os
+    import time
     file_ext = os.path.splitext(input_path)[1].lower()
     temp_xlsx = None
     
     try:
         import openpyxl
-        import pandas as pd
         
-        # Bridge legacy .xls to .xlsx
+        # 1. Bridge legacy .xls to .xlsx using a memory-efficient import
         if file_ext == '.xls':
+            import pandas as pd
             temp_xlsx = input_path + ".bridge.xlsx"
+            xls_data = pd.read_excel(input_path, sheet_name=None, engine='xlrd')
             with pd.ExcelWriter(temp_xlsx, engine='openpyxl') as writer:
-                xls_data = pd.read_excel(input_path, sheet_name=None, engine='xlrd')
                 for sheet_name, df in xls_data.items():
                     df.to_excel(writer, sheet_name=sheet_name, index=False)
             current_input = temp_xlsx
+            # Explicitly delete pandas objects to free RAM immediately
+            del xls_data
         else:
             current_input = input_path
 
-        print(f"Loading Excel file: {current_input}")
+        print(f"Global Batching: Loading {current_input}")
         wb = openpyxl.load_workbook(current_input)
-        total_sheets = len(wb.sheetnames)
-        translated_count = 0
         
-        for sheet_name in wb.sheetnames:
-            sheet = wb[sheet_name]
-            print(f"Translating sheet: {sheet_name}")
-            
+        # 2. SCAN PHASE: Collect all unique translatable strings
+        unique_texts = set()
+        for sheet in wb.worksheets:
             for row in sheet.iter_rows():
-                # Collect translatable cells in this row
-                row_batch_cells = []
-                row_batch_texts = []
-                
                 for cell in row:
                     if cell.value and isinstance(cell.value, str) and not cell.data_type == 'f':
-                        original = cell.value.strip()
-                        if original and len(original) > 1 and not should_preserve(original):
-                            row_batch_cells.append(cell)
-                            row_batch_texts.append(original)
-                
-                if row_batch_texts:
-                    # Translate entire row as one batch
-                    # Using a separator that is very unlikely to be translated or formatted away
-                    separator = " ~|~ "
-                    combined = separator.join(row_batch_texts)
-                    translated_combined = translate_text(combined, target_lang, source_lang)
-                    
+                        val = cell.value.strip()
+                        if val and len(val) > 1 and not should_preserve(val):
+                            unique_texts.add(val)
+        
+        text_list = sorted(list(unique_texts))
+        total_unique = len(text_list)
+        print(f"Found {total_unique} unique strings to translate")
+        
+        # 3. TRANSLATION PHASE: Batch translate the dictionary
+        translation_map = {}
+        if text_list:
+            current_batch = []
+            current_len = 0
+            
+            def process_text_batch(batch):
+                if not batch: return
+                sep = " ~|~ "
+                combined = sep.join(batch)
+                try:
+                    translated = translate_text(combined, target_lang, source_lang)
                     import re
-                    # More resilient split
-                    parts = re.split(r'\s*~\|~\s*', translated_combined)
-                    
-                    if len(parts) == len(row_batch_cells):
-                        for cell, trans in zip(row_batch_cells, parts):
-                            cell.value = trans.strip()
-                            translated_count += 1
+                    parts = re.split(r'\s*~\|~\s*', translated)
+                    if len(parts) == len(batch):
+                        for orig, trans in zip(batch, parts):
+                            translation_map[orig] = trans.strip()
                     else:
-                        # Fallback: try split by just the pipe if the tildes were mangled
-                        parts_alt = translated_combined.split('|')
-                        if len(parts_alt) == len(row_batch_cells):
-                            for cell, trans in zip(row_batch_cells, parts_alt):
-                                cell.value = trans.strip()
-                                translated_count += 1
-                        else:
-                            # Final Fallback: translate individually
-                            print(f"Batch mismatch (row), falling back to individual cells")
-                            for cell in row_batch_cells:
-                                cell.value = translate_text(cell.value, target_lang, source_lang)
-                                translated_count += 1
-                    
-                    # Anti-throttle breather
-                    time.sleep(0.5)
+                        # Fallback for this batch
+                        for item in batch:
+                            translation_map[item] = translate_text(item, target_lang, source_lang)
+                except:
+                    for item in batch:
+                        try: translation_map[item] = translate_text(item, target_lang, source_lang)
+                        except: translation_map[item] = item
+
+            for text in text_list:
+                current_batch.append(text)
+                current_len += len(text)
+                if current_len > 3000 or len(current_batch) >= 40:
+                    process_text_batch(current_batch)
+                    current_batch, current_len = [], 0
+                    time.sleep(0.3)
+            
+            process_text_batch(current_batch)
+
+        # 4. MAPPING PHASE: Apply translations back to workbook
+        translated_cells = 0
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.value in translation_map:
+                        cell.value = translation_map[cell.value]
+                        translated_cells += 1
         
-        # Save the workbook
         wb.save(output_path)
-        print(f"Excel translation complete. Translated {translated_count} cells across {total_sheets} sheets")
+        print(f"Excel Fix Complete: {translated_cells} cells updated via global map")
         
-        # Cleanup bridge
         if temp_xlsx and os.path.exists(temp_xlsx):
             os.remove(temp_xlsx)
             
-        return True, f"Excel translation completed: {translated_count} cells translated", output_path
+        return True, f"Excel translation completed: {translated_cells} cells translated", output_path
         
     except Exception as e:
         if temp_xlsx and os.path.exists(temp_xlsx):
-            os.remove(temp_xlsx)
-        print(f"Excel translation error: {e}")
+            try: os.remove(temp_xlsx)
+            except: pass
         import traceback
         traceback.print_exc()
-        return False, f"Excel translation failed: {str(e)}", None
+        return False, f"Excel error: {str(e)}", None
 
 def translate_csv(input_path, output_path, target_lang, source_lang='auto'):
     """Translate CSV files with row-based batching"""

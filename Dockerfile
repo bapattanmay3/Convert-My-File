@@ -46,4 +46,4 @@ ENV RENDER=true
 
 # Run gunicorn when the container launches
 # We use --timeout to handle longer conversions
-CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--workers", 1, "--threads", 2, "--timeout", 300, "--preload", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--workers", 1, "--threads", 1, "--timeout", 300, "--preload", "app:app"]
