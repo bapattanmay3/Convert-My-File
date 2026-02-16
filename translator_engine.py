@@ -504,15 +504,13 @@ def translate_document(input_path, output_path, target_lang, source_lang='auto',
             pypandoc.convert_file(input_path, 'docx', outputfile=temp_docx)
             
             # Translate the bridge file
-            success, message = translate_docx(temp_docx, output_path, target_lang, source_lang)
-            
-            # Cleanup bridge
+            success, message, res_path = translate_docx(temp_docx, output_path, target_lang, source_lang)
             if os.path.exists(temp_docx):
                 os.remove(temp_docx)
-            return success, message
+            return success, message, res_path
         except Exception as de:
             print(f"Legacy .doc conversion failed: {de}")
-            return False, f"Legacy .doc support requires pandoc: {str(de)}"
+            return False, f"Legacy .doc support requires pandoc: {str(de)}", None
 
     if translator:
         return translator(input_path, output_path, target_lang, source_lang)

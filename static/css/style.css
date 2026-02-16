@@ -169,7 +169,7 @@ select.form-select option {
     color: #ffffff !important;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 600px) {
     .back-link {
         position: static;
         margin-bottom: 30px;
