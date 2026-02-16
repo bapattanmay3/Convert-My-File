@@ -368,17 +368,22 @@ def translate_file_route():
         input_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{unique_id}_{filename}")
         file.save(input_path)
         
-        # Generate output path - PRESERVE ORIGINAL FILENAME
+        # Generate output path - SAFE INTERNAL NAME (avoid brackets for sanitization)
         file_ext = os.path.splitext(filename)[1].lower()
         base_name = os.path.splitext(filename)[0]
-        # Remove the internal unique_id from the download filename if present
-        # but keep it in the internal input_path for safety
-        output_filename = f"[Translated]_{filename}"
+        
+        # Internal name used for filesystem (safe)
+        safe_base = secure_filename(base_name)
+        internal_filename = f"trans_{unique_id}_Translated_{safe_base}{file_ext}"
         if file_ext == '.pdf':
-            # We now support PDF output directly
-            output_filename = f"[Translated]_{base_name}.pdf"
+            internal_filename = f"trans_{unique_id}_Translated_{safe_base}.pdf"
             
-        output_path = os.path.join(app.config['UPLOAD_FOLDER'], f"trans_{unique_id}_{output_filename}")
+        output_path = os.path.join(app.config['UPLOAD_FOLDER'], internal_filename)
+        
+        # Pretty name used for user download
+        download_name = f"[Translated]_{filename}"
+        if file_ext == '.pdf':
+            download_name = f"[Translated]_{base_name}.pdf"
         
         # Import translator function
         from translator_engine import translate_document
@@ -389,7 +394,7 @@ def translate_file_route():
         )
         
         # After translation, if it succeeded, we want the client to download it with our clean name
-        download_name = output_filename 
+        # download_name is already prepared above
 
         # Handle both 2-value and 3-value returns
         if isinstance(result, tuple) and len(result) == 2:
@@ -433,9 +438,9 @@ def translate_file_route():
             return jsonify({
                 'success': True,
                 'message': message,
-                'download_url': f'/download/{os.path.basename(output_path)}?display_name={download_name}',
+                'download_url': f'/download/{internal_filename}?display_name={download_name}',
                 'filename': download_name,
-                'preview_filename': os.path.basename(output_path)
+                'preview_filename': internal_filename
             })
         else:
             return jsonify({'success': False, 'error': message or 'Translation failed'}), 500
@@ -501,6 +506,15 @@ def get_preview(filename):
 
 @app.route('/download/<filename>')
 def download_file(filename):
+    display_name = request.args.get('display_name')
+    if display_name:
+        # Sanitize display_name slightly to avoid header issues but allow brackets
+        return send_from_directory(
+            app.config['UPLOAD_FOLDER'], 
+            filename, 
+            as_attachment=True,
+            download_name=display_name
+        )
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 if __name__ == '__main__':

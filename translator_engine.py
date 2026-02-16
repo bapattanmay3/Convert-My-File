@@ -330,48 +330,102 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
         return False, str(e)
 
 def translate_excel(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate Excel files preserving all sheets"""
+    """Translate Excel files with batching to avoid timeouts"""
     try:
-        import openpyxl  # ✅ ADD THIS
+        import openpyxl
         wb = openpyxl.load_workbook(input_path)
         
-        for sheet_name in wb.sheetnames:
-            sheet = wb[sheet_name]
+        # 1. Collect all translatable cells
+        cells_to_translate = []
+        for sheet in wb.worksheets:
             for row in sheet.iter_rows():
                 for cell in row:
                     if cell.value and isinstance(cell.value, str):
-                        if cell.value.strip() and not should_preserve(cell.value):
-                            cell.value = translate_text(cell.value, target_lang, source_lang)
+                        text = cell.value.strip()
+                        if text and not should_preserve(text):
+                            cells_to_translate.append((cell, text))
+        
+        # 2. Batch process
+        if cells_to_translate:
+            current_batch_texts = []
+            current_batch_cells = []
+            current_len = 0
+            
+            def process_excel_batch(texts, cells):
+                sep = " ||| "
+                combined = sep.join(texts)
+                translated = translate_text(combined, target_lang, source_lang)
+                parts = translated.split(sep)
+                
+                if len(parts) == len(cells):
+                    for cell, trans in zip(cells, parts):
+                        cell.value = trans.strip()
+                else:
+                    # Fallback
+                    for cell in cells:
+                        cell.value = translate_text(cell.value, target_lang, source_lang)
+
+            for cell, text in cells_to_translate:
+                current_batch_texts.append(text)
+                current_batch_cells.append(cell)
+                current_len += len(text)
+                
+                if current_len > 2500 or len(current_batch_texts) >= 30:
+                    process_excel_batch(current_batch_texts, current_batch_cells)
+                    current_batch_texts, current_batch_cells, current_len = [], [], 0
+            
+            # Final batch
+            if current_batch_texts:
+                process_excel_batch(current_batch_texts, current_batch_cells)
         
         wb.save(output_path)
         return True, "Excel translation completed"
     except Exception as e:
         print(f"Excel translation error: {e}")
-        import traceback
-        traceback.print_exc()
         return False, str(e)
 
-# ===== CSV TRANSLATOR =====
 def translate_csv(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate CSV files"""
+    """Translate CSV files with row-based batching"""
     try:
-        with open(input_path, 'r', encoding='utf-8-sig') as infile:
-            reader = csv.reader(infile)
+        with open(input_path, 'r', encoding='utf-8-sig') as f:
+            reader = csv.reader(f)
             rows = list(reader)
         
+        if not rows:
+            return True, "Empty CSV"
+
         translated_rows = []
         for row in rows:
-            new_row = []
-            for cell in row:
-                if should_preserve(cell):
-                    new_row.append(cell)
-                else:
-                    new_row.append(translate_text(cell, target_lang, source_lang))
-            translated_rows.append(new_row)
+            # Batch translate the entire row
+            translatable_indices = []
+            row_texts = []
             
-        with open(output_path, 'w', newline='', encoding='utf-8-sig') as outfile:
-            writer = csv.writer(outfile)
+            for i, cell in enumerate(row):
+                if cell and not should_preserve(cell):
+                    translatable_indices.append(i)
+                    row_texts.append(cell)
+            
+            if row_texts:
+                sep = " ||| "
+                translated = translate_text(sep.join(row_texts), target_lang, source_lang)
+                parts = translated.split(sep)
+                
+                new_row = list(row)
+                if len(parts) == len(translatable_indices):
+                    for idx, trans in zip(translatable_indices, parts):
+                        new_row[idx] = trans.strip()
+                else:
+                    # Fallback
+                    for idx in translatable_indices:
+                        new_row[idx] = translate_text(row[idx], target_lang, source_lang)
+                translated_rows.append(new_row)
+            else:
+                translated_rows.append(row)
+                
+        with open(output_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
             writer.writerows(translated_rows)
+            
         return True, "CSV translation completed"
     except Exception as e:
         return False, str(e)
