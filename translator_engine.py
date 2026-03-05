@@ -107,19 +107,29 @@ def translate_text(text, target_lang, source_lang='auto', max_retries=3):
     translated_chunks = []
     
     for chunk in chunks:
+        if not chunk.strip():
+            translated_chunks.append(chunk)
+            continue
+            
+        success = False
         for attempt in range(max_retries):
             try:
                 translator = GoogleTranslator(source=source_lang, target=target)
                 result = translator.translate(chunk)
                 if result:
                     translated_chunks.append(result)
+                    success = True
                     break
-                time.sleep(1)
+                time.sleep(1.5) # Increased delay
             except Exception as e:
-                print(f"Attempt {attempt+1} failed: {e}")
-                if attempt == max_retries - 1:
-                    translated_chunks.append(chunk)
-                time.sleep(2)
+                print(f"Attempt {attempt+1} failed for '{target}': {e}")
+                time.sleep(2 * (attempt + 1))
+        
+        if not success:
+            # Fallback to chunk if all retries fail
+            translated_chunks.append(chunk)
+    
+    return ' '.join(translated_chunks)
     
     return ' '.join(translated_chunks)
 
@@ -174,39 +184,85 @@ def is_valid_translation(translated_text, target_lang, original_text=None):
 
 # ===== PDF TRANSLATOR (Structural Bridge) =====
 def translate_pdf(input_path, output_path, target_lang, source_lang='auto'):
-    """Translate PDF while preserving structure"""
+    """Translate PDF while preserving structure using DOCX bridge"""
     try:
-        import PyPDF2
-        print(f"Starting PDF translation: {input_path}")
+        from converter_universal import convert_pdf_to_docx, convert_docx_to_pdf
+        
+        print(f"Starting PDF translation via DOCX bridge: {input_path}")
+        
+        # 1. Bridge PDF to DOCX
+        temp_docx = input_path + ".bridge.docx"
+        success_conv, msg_conv = convert_pdf_to_docx(input_path, temp_docx)
+        
+        if not success_conv:
+            print(f"PDF to DOCX bridge failed: {msg_conv}")
+            # Fallback to simple text extraction if bridge fails
+            return translate_pdf_fallback(input_path, output_path, target_lang, source_lang)
+            
+        # 2. Translate the DOCX
+        # We use a temporary path for the translated DOCX
+        trans_docx = output_path.replace('.pdf', '.trans.docx')
+        success_trans, msg_trans, res_path = translate_docx(temp_docx, trans_docx, target_lang, source_lang)
+        
+        if not success_trans:
+            if os.path.exists(temp_docx): os.remove(temp_docx)
+            return False, f"Translation of bridge document failed: {msg_trans}", None
+            
+        # 3. Convert back to PDF (if requested)
+        # Verify if output_path is actually requested as PDF
+        if output_path.lower().endswith('.pdf'):
+            success_pdf, msg_pdf = convert_docx_to_pdf(trans_docx, output_path)
+            
+            # Cleanup bridge files
+            if os.path.exists(temp_docx): os.remove(temp_docx)
+            
+            if success_pdf:
+                if os.path.exists(trans_docx): os.remove(trans_docx)
+                return True, "PDF translation completed with structure preservation.", output_path
+            else:
+                # If PDF conversion fails, return the translated DOCX
+                print(f"PDF back-conversion failed: {msg_pdf}. Returning translated Word doc instead.")
+                return True, "Content translated (returned as .docx due to PDF conversion issue)", trans_docx
+        else:
+            # If output_path wasn't .pdf, just return what we have
+            if os.path.exists(temp_docx): os.remove(temp_docx)
+            return True, "Document translated", trans_docx
+            
+    except Exception as e:
+        print(f"PDF bridge translation error: {e}")
+        import traceback
+        traceback.print_exc()
+        return translate_pdf_fallback(input_path, output_path, target_lang, source_lang)
+
+def translate_pdf_fallback(input_path, output_path, target_lang, source_lang='auto'):
+    """Fallback PDF translator using simple text extraction"""
+    try:
+        import pdfplumber
+        from converter_universal import convert_txt_to_pdf
+        
+        print(f"Using fallback PDF translation: {input_path}")
         
         text_content = []
-        with open(input_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
-            total_pages = len(pdf_reader.pages)
-            print(f"PDF has {total_pages} pages")
-            
-            for i, page in enumerate(pdf_reader.pages):
-                print(f"Translating page {i+1}/{total_pages}")
+        with pdfplumber.open(input_path) as pdf:
+            total_pages = len(pdf.pages)
+            for i, page in enumerate(pdf.pages):
                 text = page.extract_text()
                 if text and text.strip():
                     translated = translate_text(text, target_lang, source_lang)
                     text_content.append(translated)
-                else:
-                    text_content.append("")
         
-        # Save as text file (PDF creation is complex)
-        output_txt = output_path.replace('.pdf', '.txt')
-        with open(output_txt, 'w', encoding='utf-8') as f:
+        temp_txt = output_path.replace('.pdf', '.fallback.txt')
+        with open(temp_txt, 'w', encoding='utf-8-sig') as f:
             f.write('\n\n'.join(text_content))
-        
-        print(f"PDF translation complete. Saved to: {output_txt}")
-        return True, f"PDF translation completed: {total_pages} pages", output_txt
-        
+            
+        success_pdf, msg_pdf = convert_txt_to_pdf(temp_txt, output_path)
+        if success_pdf:
+            if os.path.exists(temp_txt): os.remove(temp_txt)
+            return True, "PDF translation completed (simplified layout).", output_path
+        else:
+            return True, "PDF content translated (saved as .txt)", temp_txt
     except Exception as e:
-        print(f"PDF translation error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False, f"PDF translation failed: {str(e)}", None
+        return False, f"Fallback translation failed: {str(e)}", None
 
 def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
     """Translate Word documents with batching to prevent timeouts/502s"""
@@ -265,32 +321,32 @@ def translate_docx(input_path, output_path, target_lang, source_lang='auto'):
         # 2. Translate Tables (CRITICAL: Extract and translate while keeping structure)
         for table in doc.tables:
             for row in table.rows:
-                table_batch = []
-                cell_refs = []
-                for cell in row.cells:
-                    # Collect cell text for batching per row to stay efficient but safe
-                    cell_text = cell.text.strip()
-                    if cell_text and not should_preserve(cell_text):
-                        table_batch.append(cell_text)
-                        cell_refs.append(cell)
+                # Cells in a row can be merged; we only want to translate unique cell contents
+                cells_to_translate = []
+                seen_cells = set()
                 
-                if table_batch:
-                    separator = " [[[TSEP]]] "
-                    combined = separator.join(table_batch)
-                    translated_combined = translate_text(combined, target_lang, source_lang)
-                    translated_parts = translated_combined.split(separator)
+                for cell in row.cells:
+                    if cell not in seen_cells:
+                        text = cell.text.strip()
+                        if text and not should_preserve(text):
+                            cells_to_translate.append(cell)
+                        seen_cells.add(cell)
+                
+                if cells_to_translate:
+                    # Translate individually to be safest for table structure, 
+                    # but we can try small batches if there are many cells
+                    for cell in cells_to_translate:
+                        try:
+                            # Extract ALL text from cell (including multiple paragraphs)
+                            cell_text = cell.text.strip()
+                            if cell_text:
+                                cell.text = translate_text(cell_text, target_lang, source_lang).strip()
+                        except Exception as te:
+                            print(f"Cell translation error: {te}")
                     
-                    if len(translated_parts) == len(cell_refs):
-                        for cell, part in zip(cell_refs, translated_parts):
-                            cell.text = part.strip()
-                    else:
-                        for cell in cell_refs:
-                            try:
-                                cell.text = translate_text(cell.text, target_lang, source_lang).strip()
-                            except: pass
-                    
-                    # Anti-throttle breather
-                    time.sleep(0.5)
+                    time.sleep(0.2)
+        
+        doc.save(output_path)
         
         doc.save(output_path)
         return True, "Word document translation completed", output_path

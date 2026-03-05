@@ -1,22 +1,200 @@
 # Standard library imports
 import os
 import uuid
+import urllib.parse
 
 # Flask related imports
-from flask import Flask, render_template, request, jsonify, send_from_directory, flash, redirect, url_for
+from flask import Flask, render_template, request, jsonify, send_from_directory, flash, redirect, url_for, send_file, session
+from functools import wraps
 from werkzeug.utils import secure_filename
 
 # Note: heavy imports (translator_engine, converter_universal, etc.) 
 # are moved inside routes or after app initialization.
 
+import time
+import threading
+import json
+import requests
+from datetime import datetime, timedelta
+
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'royal-enfield-racing-green-2026' # Change this for production
+app.config['ADMIN_USER'] = 'bapattanmay'
+app.config['ADMIN_PASS'] = 'qazwsxedcrfv@123'
 app.config['SITE_NAME'] = 'Convert My File'
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['ANALYTICS_FILE'] = 'analytics.json'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Authentication Decorator
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# --- Admin Routes ---
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if username == app.config['ADMIN_USER'] and password == app.config['ADMIN_PASS']:
+            session['admin_logged_in'] = True
+            return redirect(url_for('admin_dashboard'))
+        else:
+            flash('Invalid username or password', 'error')
+            
+    return render_template('login.html', site_name=app.config['SITE_NAME'])
+
+@app.route('/logout')
+def logout():
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('login'))
+
+# Initialize Analytics File
+if not os.path.exists(app.config['ANALYTICS_FILE']):
+    with open(app.config['ANALYTICS_FILE'], 'w') as f:
+        json.dump({"visitors": [], "usage_count": 0}, f)
+
+def log_visit():
+    """Log a unique visitor visit with location data"""
+    try:
+        # Get public IP (Simple heuristic for demo/local testing)
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        
+        # Load current analytics
+        with open(app.config['ANALYTICS_FILE'], 'r') as f:
+            data = json.load(f)
+        
+        # Check if already logged (primitive session tracking)
+        # In a real app, we'd use cookies or a database
+        visitor_ips = [v.get('ip') for v in data['visitors']]
+        if ip not in visitor_ips:
+            # Get location via API (Free tier)
+            location = "Unknown"
+            try:
+                # Using ip-api.com (no key needed for bulk/simple calls)
+                res = requests.get(f"http://ip-api.com/json/{ip}", timeout=2).json()
+                if res.get('status') == 'success':
+                    location = f"{res.get('city')}, {res.get('country')}"
+            except: pass
+            
+            data['visitors'].append({
+                "ip": ip,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "location": location
+            })
+            
+            with open(app.config['ANALYTICS_FILE'], 'w') as f:
+                json.dump(data, f)
+    except Exception as e:
+        print(f"Tracking error: {e}")
+
+def log_usage():
+    """Increment the usage counter for successful service completion"""
+    try:
+        with open(app.config['ANALYTICS_FILE'], 'r') as f:
+            data = json.load(f)
+        data['usage_count'] = data.get('usage_count', 0) + 1
+        with open(app.config['ANALYTICS_FILE'], 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"Usage logging error: {e}")
+
+def cleanup_old_files():
+    """Background task to delete files older than 5 minutes"""
+    while True:
+        try:
+            now = time.time()
+            # 300 seconds = 5 minutes
+            threshold = now - 300
+            
+            for f in os.listdir(app.config['UPLOAD_FOLDER']):
+                f_path = os.path.join(app.config['UPLOAD_FOLDER'], f)
+                if os.path.isfile(f_path):
+                    # Check file modification time
+                    if os.path.getmtime(f_path) < threshold:
+                        try:
+                            os.remove(f_path)
+                            print(f"Auto-deleted expired file: {f}")
+                        except Exception as e:
+                            print(f"Error deleting file {f}: {e}")
+        except Exception as e:
+            print(f"Cleanup thread error: {e}")
+            
+        time.sleep(60)  # Check every minute
+
+# Start cleanup thread
+cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
+cleanup_thread.start()
+
+@app.route('/robots.txt')
+def robots():
+    return send_from_directory('static', 'robots.txt')
+
+@app.route('/sitemap.xml')
+def sitemap():
+    return send_from_directory('static', 'sitemap.xml')
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    """Display analytics dashboard"""
+    try:
+        with open(app.config['ANALYTICS_FILE'], 'r') as f:
+            data = json.load(f)
+        
+        visitors = data.get('visitors', [])
+        total_visitors = len(visitors)
+        usage_count = data.get('usage_count', 0)
+        
+        # Calculate Conversion Rate
+        conversion_rate = 0
+        if total_visitors > 0:
+            conversion_rate = round((usage_count / total_visitors) * 100, 1)
+            
+        # Group by location
+        locations = {}
+        # Group by date
+        daily_stats = {}
+        
+        for v in visitors:
+            # Location stats
+            loc = v.get('location', 'Unknown')
+            locations[loc] = locations.get(loc, 0) + 1
+            
+            # Daily stats
+            try:
+                # v['timestamp'] is like "2026-03-05 15:45:12"
+                date_str = v['timestamp'].split(' ')[0]
+                daily_stats[date_str] = daily_stats.get(date_str, 0) + 1
+            except: pass
+            
+        # Sort locations by count
+        sorted_locations = dict(sorted(locations.items(), key=lambda item: item[1], reverse=True))
+        # Sort daily stats by date (newest first)
+        sorted_daily = dict(sorted(daily_stats.items(), key=lambda item: item[0], reverse=True))
+        
+        return render_template('admin.html', 
+                             total_visitors=total_visitors,
+                             usage_count=usage_count,
+                             conversion_rate=conversion_rate,
+                             locations=sorted_locations,
+                             daily_stats=sorted_daily,
+                             recent_visitors=visitors[-10:][::-1], # Last 10
+                             site_name=app.config['SITE_NAME'])
+    except Exception as e:
+        return f"Dashboard error: {e}", 500
+
 @app.route('/')
 def home():
+    log_visit()
     return render_template('index.html', site_name=app.config['SITE_NAME'])
 
 @app.route('/favicon.ico')
@@ -244,6 +422,8 @@ def compress():
             success, message = False, f"Format {ext} not supported for target-size processing"
 
         if success and os.path.exists(output_path):
+            # Usage tracked
+            log_usage()
             return jsonify({
                 'success': True,
                 'message': message,
@@ -283,10 +463,17 @@ def convert_file_universal():
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
     
     # Import converter
-    from converter_universal import convert_file
+    import converter_universal as cv
     
     # Perform conversion
-    success, message = convert_file(input_path, output_path, source_format, target_format)
+    try:
+        if source_format in cv.FILE_CONVERSIONS and target_format in cv.FILE_CONVERSIONS[source_format]:
+            conversion_func = cv.FILE_CONVERSIONS[source_format][target_format]
+            success, message = conversion_func(input_path, output_path)
+        else:
+            success, message = False, f"Unsupported conversion from {source_format} to {target_format}"
+    except Exception as e:
+        success, message = False, str(e)
     
     if success and os.path.exists(output_path):
         return jsonify({
@@ -448,10 +635,13 @@ def translate_file_route():
             if final_ext != file_ext:
                 download_name = os.path.splitext(download_name)[0] + final_ext
             
+            # URL encode the download name for stability in headers
+            encoded_download_name = urllib.parse.quote(download_name)
+            
             return jsonify({
                 'success': True,
                 'message': message,
-                'download_url': f'/download/{final_filename}?display_name={download_name}',
+                'download_url': f'/download/{final_filename}?display_name={encoded_download_name}',
                 'filename': download_name,
                 'preview_filename': final_filename
             })
@@ -551,7 +741,8 @@ def get_preview(filename):
 def download_file(filename):
     display_name = request.args.get('display_name')
     if display_name:
-        # Sanitize display_name slightly to avoid header issues but allow brackets
+        # Unquote because it's coming from URL param
+        display_name = urllib.parse.unquote(display_name)
         return send_from_directory(
             app.config['UPLOAD_FOLDER'], 
             filename, 

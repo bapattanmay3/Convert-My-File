@@ -91,16 +91,90 @@ def get_markdown():
         _markdown = markdown.markdown
     return _markdown
 
+def remove_aspose_watermark(doc):
+    """Remove the 'Evaluation Only' watermark and copyright claims added by Aspose.Words"""
+    try:
+        import aspose.words as aw
+        
+        def is_watermark(text):
+            if not text: return False
+            t = text.lower()
+            return ("evaluation only" in t or "copyright" in t) and "aspose" in t
+
+        # 1. Remove from paragraphs (Body)
+        for para in doc.get_child_nodes(aw.NodeType.PARAGRAPH, True):
+            para = para.as_paragraph()
+            if is_watermark(para.get_text()):
+                para.remove()
+        
+        # 2. Remove from Headers and Footers
+        for section in doc.sections:
+            section = section.as_section()
+            for header_footer in section.headers_footers:
+                header_footer = header_footer.as_header_footer()
+                for para in header_footer.get_child_nodes(aw.NodeType.PARAGRAPH, True):
+                    para = para.as_paragraph()
+                    if is_watermark(para.get_text()):
+                        para.remove()
+                
+                # Check shapes inside headers/footers
+                for shape in header_footer.get_child_nodes(aw.NodeType.SHAPE, True):
+                    shape = shape.as_shape()
+                    try:
+                        if is_watermark(shape.get_text()):
+                            shape.remove()
+                    except: pass
+
+        # 3. Remove specifically from shapes (floating text boxes)
+        for shape in doc.get_child_nodes(aw.NodeType.SHAPE, True):
+            shape = shape.as_shape()
+            try:
+                # Some watermarks are in shapes with specific text
+                if is_watermark(shape.get_text()):
+                    shape.remove()
+            except: pass
+
+    except Exception as e:
+        print(f"Failed to remove watermark: {e}")
+
 # ============ PDF CONVERSIONS ============
 
 def convert_pdf_to_docx(input_path, output_path):
-    """PDF to Word Document"""
+    """PDF to Word Document with Pixel-Perfect Fidelity Attempt"""
     try:
-        Converter = get_pdf2docx()
+        # Method 1: Aspose.Words (Superior for layout and complex graphics)
+        try:
+            import aspose.words as aw
+            
+            # Use advanced load options for maximum fidelity
+            load_options = aw.loading.PdfLoadOptions()
+            # Note: We can add warning callbacks here to debug if fonts are missing
+            
+            doc_aw = aw.Document(input_path, load_options)
+            
+            # Remove watermark
+            remove_aspose_watermark(doc_aw)
+            
+            # Ensure the document layout is recalculated before saving
+            doc_aw.update_page_layout()
+            
+            # Save options for Word
+            save_options = aw.saving.OoxmlSaveOptions(aw.SaveFormat.DOCX)
+            # Use a slightly more "fixed" layout approach by preserving formatting exactly
+            save_options.compliance = aw.saving.OoxmlCompliance.ISO29500_2008_STRICT
+            
+            doc_aw.save(output_path, save_options)
+            return True, "PDF to DOCX conversion successful (High-Fidelity Aspose)"
+        except Exception as aw_err:
+            print(f"Aspose.Words PDF to DOCX failed: {aw_err}")
+
+        # Method 2: pdf2docx (Robust fallback)
+        # For some files, pdf2docx's rule-based approach is actually cleaner for tables
+        from pdf2docx import Converter
         cv = Converter(input_path)
         cv.convert(output_path)
         cv.close()
-        return True, "PDF to DOCX conversion successful"
+        return True, "PDF to DOCX conversion successful (Fallback pdf2docx)"
     except Exception as e:
         return False, str(e)
 
@@ -198,14 +272,27 @@ def convert_xlsx_to_xml(input_path, output_path):
         return False, str(e)
 
 def convert_xlsx_to_pdf(input_path, output_path):
-    """Excel to PDF via HTML"""
+    """Excel to PDF with High Fidelity (Preserves diagrams and complex formatting)"""
     try:
+        # Method 1: Aspose.Cells / Words can handle Excel formatting much better than manual HTML
+        try:
+            import aspose.words as aw
+            # Aspose.Words can actually load Excel files and save to PDF directly
+            # but usually Aspose.Cells is preferred. Let's try Aspose.Words if it handles it.
+            doc_aw = aw.Document(input_path)
+            remove_aspose_watermark(doc_aw)
+            doc_aw.save(output_path)
+            return True, "XLSX to PDF conversion successful (High-Fidelity Aspose)"
+        except:
+            pass
+            
+        # Method 2: Pandas + WeasyPrint (Basic fallback)
         df = pd.read_excel(input_path)
         html = df.to_html(index=False)
         
         HTML = get_weasyprint()
         HTML(string=f"<html><body>{html}</body></html>").write_pdf(output_path)
-        return True, "XLSX to PDF conversion successful"
+        return True, "XLSX to PDF conversion successful (Basic Fallback)"
     except Exception as e:
         return False, str(e)
 
@@ -475,9 +562,33 @@ def convert_docx_to_pdf(input_path, output_path):
             except:
                 pass
 
-        # Method 2: WeasyPrint (Pure Python, primary fallback)
+        # Method 2: Aspose.Words (High Fidelity - Handles Diagrams/Tables/Layouts perfectly)
         try:
-            # We convert to HTML first, then to PDF via WeasyPrint
+            import aspose.words as aw
+            doc_aw = aw.Document(input_path)
+            remove_aspose_watermark(doc_aw)
+            doc_aw.save(output_path)
+            return True, "DOCX to PDF conversion successful (High-Fidelity Aspose)"
+        except Exception as aw_err:
+            print(f"Aspose.Words conversion failed: {aw_err}")
+
+        # Method 3: pypandoc + WeasyPrint (Alternative Fallback)
+        try:
+            import pypandoc
+            temp_html = input_path.replace('.docx', '.high_fid.html')
+            # Use pypandoc to convert DOCX to HTML with high fidelity
+            pypandoc.convert_file(input_path, 'html', outputfile=temp_html, extra_args=['--standalone', '--embed-resources'])
+            
+            if os.path.exists(temp_html):
+                HTML = get_weasyprint()
+                HTML(temp_html).write_pdf(output_path)
+                os.remove(temp_html)
+                return True, "DOCX to PDF conversion successful (High-Fidelity pypandoc)"
+        except Exception as py_err:
+            print(f"pypandoc high-fidelity conversion failed: {py_err}")
+
+        # Method 3: Simple WeasyPrint (Basic fallback)
+        try:
             temp_html = input_path.replace('.docx', '.temp_bridge.html')
             success, msg = convert_docx_to_html(input_path, temp_html)
             if success:
@@ -485,7 +596,7 @@ def convert_docx_to_pdf(input_path, output_path):
                 HTML(temp_html).write_pdf(output_path)
                 if os.path.exists(temp_html):
                     os.remove(temp_html)
-                return True, "DOCX to PDF conversion successful (WeasyPrint Fallback)"
+                return True, "DOCX to PDF conversion successful (Basic WeasyPrint Fallback)"
         except Exception as wp_err:
             print(f"WeasyPrint fallback failed: {wp_err}")
 
@@ -514,8 +625,16 @@ def convert_docx_to_txt(input_path, output_path):
         return False, str(e)
 
 def convert_docx_to_html(input_path, output_path):
-    """Word to HTML"""
+    """Word to HTML (with pypandoc high-fidelity support)"""
     try:
+        try:
+            import pypandoc
+            pypandoc.convert_file(input_path, 'html', outputfile=output_path, extra_args=['--standalone', '--embed-resources'])
+            return True, "DOCX to HTML conversion successful (pypandoc)"
+        except Exception as py_err:
+            print(f"pypandoc DOCX to HTML failed: {py_err}")
+            
+        # Fallback to manual extraction if pypandoc is missing/fails
         Document = get_docx()
         doc = Document(input_path)
         html_content = [
@@ -547,7 +666,7 @@ def convert_docx_to_html(input_path, output_path):
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(html_content))
         
-        return True, "DOCX to HTML conversion successful"
+        return True, "DOCX to HTML conversion successful (Manual Fallback)"
     except Exception as e:
         return False, str(e)
 
@@ -694,7 +813,7 @@ FILE_CONVERSIONS = {
         'html': convert_docx_to_html,
     },
     'doc': {
-        'docx': lambda i, o: (os.rename(i, o) or (True, "DOC to DOCX converted")),
+        'docx': lambda i, o: convert_pdf_to_docx(i, o), # Aspose.Words handles both PDF and DOC
         'txt': convert_docx_to_txt,
     },
     # Text Conversions

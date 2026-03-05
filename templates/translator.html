@@ -2,7 +2,7 @@
 {% block content %}
 <div class="translator-container">
     <div class="translator-main">
-        <h1>🌍 Translator</h1>
+        <h1>🌍 Convert My File - Translator</h1>
         <p class="tagline">High-Fidelity Document Translation across 100+ Languages</p>
 
         <div class="converter-card" id="translator-card">
@@ -279,6 +279,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success) {
+                        startDeletionTimer();
                         lastResultFilename = data.preview_filename;
                         downloadLink.href = data.download_url;
                         resultArea.style.display = 'block';

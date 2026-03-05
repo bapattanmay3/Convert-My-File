@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pandoc \
     # File type detection
     libmagic1 \
+    # Aspose.Words requirements (for rendering/imaging)
+    libgdiplus \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file into the container

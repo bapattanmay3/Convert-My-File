@@ -4,7 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ site_name }} - File Converter</title>
+    <meta name="description"
+        content="Convert My File - The Ultimate Premium Suite to Convert, Translate, Merge & Compress files with high-fidelity. Supports PDF, DOCX, TXT and more.">
+    <meta name="keywords"
+        content="file converter, pdf to word, document translator, pdf merger, file compressor, high-fidelity conversion">
+    <meta name="author" content="Convert My File">
+    <title>{{ site_name }} - High-Fidelity File Suite</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -28,19 +33,20 @@
         }
 
         .upload-area {
-            border: 2px dashed rgba(255, 107, 74, 0.3);
+            border: 2px dashed rgba(243, 156, 18, 0.3);
             border-radius: 20px;
             padding: 40px;
             text-align: center;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            background: rgba(255, 107, 74, 0.02);
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
             margin-bottom: 20px;
         }
 
         .upload-area:hover {
-            border-color: var(--primary);
-            background: rgba(255, 107, 74, 0.05);
+            border-color: var(--accent);
+            background: rgba(255, 255, 255, 0.1);
             transform: translateY(-2px);
         }
 
@@ -69,19 +75,132 @@
             margin-top: 15px;
             font-weight: 600;
         }
+
+        .legal-disclaimer {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            text-align: left;
+        }
+
+        .legal-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .timer-container {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            background: var(--card-bg);
+            border: 1px solid var(--accent);
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: 700;
+            color: var(--accent);
+            display: none;
+            /* Hidden by default */
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 0 20px rgba(243, 156, 18, 0.2);
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            animation: pulse-border 2s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% {
+                box-shadow: 0 0 0 0 rgba(243, 156, 18, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(243, 156, 18, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(243, 156, 18, 0);
+            }
+        }
+
+        .timer-icon {
+            font-size: 1.2rem;
+        }
     </style>
 </head>
 
 <body>
-    <a href="/" class="back-link">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-        </svg>
-        Back to Tools
-    </a>
+    <div class="timer-container" id="deletion-timer">
+        <span class="timer-icon">⏳</span>
+        <span id="timer-text">File auto-deletion: 05:00</span>
+    </div>
+
+    <div class="nav-branding">
+        <div class="logo-tb">
+            <span class="logo-t">T</span>
+            <span class="logo-anchor">⚓</span>
+            <span class="logo-b">B</span>
+        </div>
+        <a href="/" class="back-link-refined">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Back to Tools
+        </a>
+    </div>
     <div class="tool-container">
         {% block content %}{% endblock %}
+
+        <div class="legal-disclaimer" style="margin-top: 40px; margin-bottom: 0;">
+            <span class="legal-icon">⚖️</span>
+            <div>
+                <strong>Legal Privacy Notice:</strong> We value your privacy. Your files are processed securely and are
+                <strong>NEVER stored</strong> on our servers permanently. All processed files are automatically deleted
+                after 5 minutes.
+            </div>
+        </div>
     </div>
+
+    <script>
+        let timerInterval = null;
+
+        function startDeletionTimer() {
+            const display = document.querySelector('#timer-text');
+            const container = document.getElementById('deletion-timer');
+
+            // Show the timer
+            container.style.display = 'flex';
+
+            // Reset if already running
+            if (timerInterval) clearInterval(timerInterval);
+
+            let duration = 60 * 5;
+            let timer = duration, minutes, seconds;
+
+            timerInterval = setInterval(function () {
+                minutes = parseInt(timer / 60, 10);
+                seconds = parseInt(timer % 60, 10);
+
+                minutes = minutes < 10 ? "0" + minutes : minutes;
+                seconds = seconds < 10 ? "0" + seconds : seconds;
+
+                display.textContent = "File auto-deletion: " + minutes + ":" + seconds;
+
+                if (--timer < 0) {
+                    clearInterval(timerInterval);
+                    container.style.borderColor = "#ef4444";
+                    container.style.color = "#ef4444";
+                }
+            }, 1000);
+        }
+    </script>
 </body>
 
 </html>

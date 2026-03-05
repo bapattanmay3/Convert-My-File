@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>📉 Smart Size Compressor</h1>
+<h1>📉 Convert My File - Compressor</h1>
 <p class="tagline">Compress or Expand files to your exact target size (5KB - 50MB)</p>
 
 <div class="converter-card">
@@ -186,6 +186,7 @@
             statusMsg.style.display = 'none';
 
             if (data.success) {
+                startDeletionTimer();
                 downloadLink.href = data.download_url;
                 resultArea.style.display = 'block';
             } else {

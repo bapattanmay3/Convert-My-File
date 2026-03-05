@@ -1,42 +1,44 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <h1>✨ {{ site_name }}</h1>
+    <p class="tagline">The Ultimate Premium Suite: Convert, Translate, Merge & Compress</p>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ site_name }} - File Converter</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-</head>
-
-<body>
-    <div class="container">
-        <h1>✨ {{ site_name }}</h1>
-        <p class="tagline">The Ultimate Premium Suite: Convert, Translate, Merge & Compress</p>
-
-        <div class="tools">
-            <a href="/converter" class="tool-card">
-                <span class="tool-icon">🔄</span>
-                <h3>Converter</h3>
-                <p>PDF, DOCX, XLSX, PPTX & Images</p>
-            </a>
-            <a href="/translator" class="tool-card">
-                <span class="tool-icon">🌍</span>
-                <h3>Translator</h3>
-                <p>100+ Languages with Document Support</p>
-            </a>
-            <a href="/merger" class="tool-card">
-                <span class="tool-icon">📎</span>
-                <h3>Merger</h3>
-                <p>Combine Multiple PDFs into One</p>
-            </a>
-            <a href="/compressor" class="tool-card">
-                <span class="tool-icon">📦</span>
-                <h3>Compressor</h3>
-                <p>Reduce Size without Losing Quality</p>
-            </a>
-        </div>
+    <div class="tools">
+        <a href="/converter" class="tool-card">
+            <span class="tool-icon">🔄</span>
+            <h3>Converter</h3>
+            <p>High-Fidelity: PDF, DOC & TXT</p>
+        </a>
+        <a href="/translator" class="tool-card">
+            <span class="tool-icon">🌍</span>
+            <h3>Translator</h3>
+            <p>100+ Languages with Document Support</p>
+        </a>
+        <a href="/merger" class="tool-card">
+            <span class="tool-icon">📎</span>
+            <h3>Merger</h3>
+            <p>Combine Multiple PDFs into One</p>
+        </a>
+        <a href="/compressor" class="tool-card">
+            <span class="tool-icon">📦</span>
+            <h3>Compressor</h3>
+            <p>Reduce Size without Losing Quality</p>
+        </a>
     </div>
-</body>
+</div>
 
-</html>
+<style>
+    .container {
+        text-align: center;
+        padding-top: 20px;
+    }
+
+    .tools {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 25px;
+        margin-top: 40px;
+    }
+</style>
+{% endblock %}

@@ -1,22 +1,25 @@
 :root {
-    --primary: #ff6b4a;
-    --primary-hover: #ff8a5c;
-    --accent: #ff4d4d;
-    --dark: #000000;
-    /* Pure Black Background */
-    --card-bg: #111111;
-    /* Deep Black for cards */
-    --glass-border: rgba(255, 255, 255, 0.15);
-    --text-main: #ffffff;
-    /* Brighter white for text */
-    --text-muted: #cccccc;
-    /* Clearer gray for muted text */
-    --input-bg: #1a1a1a;
+    --primary: #002e20;
+    /* Premium British Racing Green */
+    --primary-hover: #001f16;
+    --accent: #e67e22;
+    /* Warm Indicator Amber */
+    --accent-hover: #d35400;
+    /* Richer Burned Orange */
+    --dark: #001a14;
+    /* Deep Shadow */
+    --card-bg: rgba(0, 31, 22, 0.85);
+    /* High-density Glass */
+    --glass-border: rgba(230, 126, 34, 0.3);
+    /* Amber tinted edge */
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --input-bg: rgba(0, 26, 18, 0.6);
 }
 
 body {
     font-family: 'Outfit', 'Inter', sans-serif;
-    background: #000000;
+    background: var(--primary);
     color: var(--text-main);
     margin: 0;
     padding: 0;
@@ -33,7 +36,7 @@ body {
 h1 {
     font-size: 3.5rem;
     font-weight: 800;
-    background: linear-gradient(135deg, #ffffff 0%, var(--primary) 100%);
+    background: linear-gradient(135deg, #ffffff 0%, var(--accent) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -46,9 +49,9 @@ h1 {
     margin-bottom: 50px;
 }
 
-/* Premium Warm Buttons */
+/* Premium Warm Gold Buttons */
 .btn-premium {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
     color: white !important;
     padding: 14px 35px;
     border-radius: 30px;
@@ -56,7 +59,7 @@ h1 {
     border: none;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 10px 15px -3px rgba(255, 107, 74, 0.4);
+    box-shadow: 0 10px 15px -3px rgba(243, 156, 18, 0.4);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -66,8 +69,8 @@ h1 {
 
 .btn-premium:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 20px 25px -5px rgba(255, 107, 74, 0.5);
-    background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%);
+    box-shadow: 0 20px 25px -5px rgba(243, 156, 18, 0.5);
+    background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent) 100%);
 }
 
 .btn-premium:active {
@@ -91,31 +94,31 @@ h1 {
 .tool-card {
     background: var(--card-bg);
     border: 1px solid var(--glass-border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-radius: 24px;
     padding: 35px 25px;
     text-decoration: none;
-    color: white;
+    color: var(--text-main);
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 15px;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
 }
 
 .tool-card:hover {
     transform: translateY(-8px);
-    border-color: var(--primary);
-    background: #1a1a1a;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+    border-color: var(--accent);
+    background: rgba(0, 58, 48, 0.9);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
 }
 
 .tool-card h3 {
     margin: 0;
     font-size: 1.5rem;
-    background: linear-gradient(135deg, #ffffff 0%, var(--primary) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #ffffff;
 }
 
 .tool-card p {
@@ -130,24 +133,72 @@ h1 {
     margin-bottom: 5px;
 }
 
-/* Back Link Style */
-.back-link {
+/* Branding & Logo */
+.nav-branding {
     position: absolute;
     top: 40px;
     left: 40px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    z-index: 100;
+}
+
+.logo-tb {
+    width: 68px;
+    height: 54px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(230, 126, 34, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.logo-anchor {
+    font-size: 2.8rem;
+    line-height: 1;
+    z-index: 1;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.logo-t,
+.logo-b {
+    position: absolute;
+    font-size: 0.75rem;
+    font-weight: 800;
+    z-index: 2;
+    font-family: 'Outfit', sans-serif;
+}
+
+.logo-t {
+    top: 12px;
+    left: 10px;
+}
+
+.logo-b {
+    top: 12px;
+    right: 10px;
+}
+
+.back-link-refined {
     color: var(--text-muted);
     text-decoration: none;
     display: flex;
     align-items: center;
     gap: 10px;
     font-weight: 600;
-    transition: color 0.3s, transform 0.3s;
-    z-index: 100;
+    transition: all 0.3s;
 }
 
-.back-link:hover {
-    color: var(--primary);
-    transform: translateX(-5px);
+.back-link-refined:hover {
+    color: var(--accent);
+    transform: translateX(5px);
 }
 
 /* Dropdown / Select Fixes */
