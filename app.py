@@ -130,9 +130,32 @@ def cleanup_old_files():
             
         time.sleep(60)  # Check every minute
 
+def keep_alive():
+    """Background task to ping the application's own URL to keep it active on Render"""
+    url = os.environ.get('RENDER_EXTERNAL_URL')
+    if not url:
+        print("Keep-alive: RENDER_EXTERNAL_URL not set, skipping self-ping.")
+        return
+        
+    print(f"Keep-alive thread started, targeting: {url}")
+    while True:
+        try:
+            # Ping the health endpoint
+            response = requests.get(f"{url}/health", timeout=10)
+            print(f"Keep-alive ping at {datetime.now().strftime('%H:%M:%S')}: Status {response.status_code}")
+        except Exception as e:
+            print(f"Keep-alive ping error: {e}")
+            
+        # Wait 10 minutes (600 seconds) - Render sleeps after 15 mins of inactivity
+        time.sleep(600)
+
 # Start cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_old_files, daemon=True)
 cleanup_thread.start()
+
+# Start keep-alive thread
+keep_alive_thread = threading.Thread(target=keep_alive, daemon=True)
+keep_alive_thread.start()
 
 @app.route('/robots.txt')
 def robots():
@@ -200,6 +223,11 @@ def home():
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
+
+@app.route('/health')
+def health():
+    """Simple health check endpoint for keep-alive pings"""
+    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()}), 200
 
 @app.route('/converter')
 def converter():
@@ -373,7 +401,7 @@ def compress():
             tolerance = 0.05 # 5% error margin
             working_img = orig_img
             
-            for attempt in range(5):
+            for attempt in range(10):  # Increased iterations for tighter convergence
                 # Calculate dimensions for this pass
                 temp_w = max(1, int(orig_img.width * current_scale))
                 temp_h = max(1, int(orig_img.height * current_scale))
@@ -388,23 +416,50 @@ def compress():
                 working_img.save(buf, **test_params)
                 current_size = buf.tell()
                 
-                # Are we close enough?
-                if abs(current_size - target_bytes) / target_bytes <= tolerance:
+                # Are we close enough? (Within 0.1% or close to target)
+                if abs(current_size - target_bytes) / target_bytes <= 0.001:
                     break
                 
                 # Recalculate scale based on actual size result
-                # Ratio is sqrt(Target/Actual) because size is area-proportional
                 size_ratio = target_bytes / current_size
-                # Dampen the adjustment to avoid oscillations
-                scale_adjustment = (size_ratio ** 0.5) * 0.95 if size_ratio < 1 else (size_ratio ** 0.5)
+                # Using 0.5 power for area-proportional scaling
+                scale_adjustment = (size_ratio ** 0.5)
+                
+                # Dampen only if we are oscillating
+                if (size_ratio < 1 and current_scale > 1) or (size_ratio > 1 and current_scale < 1):
+                    scale_adjustment *= 0.98
+                    
                 current_scale *= scale_adjustment
                 
-                # Safety boundaries (0.01x to 8.0x original)
-                current_scale = max(0.01, min(8.0, current_scale))
+                # Safety boundaries (0.01x to 32.0x original to support up to 100MB+)
+                current_scale = max(0.01, min(32.0, current_scale))
 
             # Final Save
+            # Upgrade quality for expansion cases
+            if current_size > os.path.getsize(input_path) * 0.9:
+                from PIL import ImageFilter
+                # Multi-stage enhancement: 
+                # 1. Subtle Gaussian Blur to smooth original artifacts/noise
+                # 2. Strong UnsharpMask to restore edges at NEW resolution
+                working_img = working_img.filter(ImageFilter.GaussianBlur(radius=0.5))
+                working_img = working_img.filter(ImageFilter.UnsharpMask(radius=2, percent=180, threshold=2))
+                test_params['quality'] = 98 # Near lossless for expansion
+
             working_img.save(output_path, **test_params)
-            success, message = True, f"Precision calibrated ({unit}) after {attempt+1} passes"
+            
+            # --- Lever 3: Exact Byte Padding (v4.0) ---
+            # After expansion reaches the limits of JPEG/WebP headers, we pad to match target_bytes EXACTLY.
+            final_size = os.path.getsize(output_path)
+            if final_size < target_bytes:
+                padding_needed = int(target_bytes - final_size)
+                # Appending safe NULL bytes to the end of the image container
+                # Most image decoders ignore extra data at the end of the file.
+                with open(output_path, 'ab') as f:
+                    f.write(b'\0' * padding_needed)
+                final_size = os.path.getsize(output_path)
+                message = f"Exact size matched: {final_size} bytes (with precision padding)"
+            else:
+                message = f"Precision calibrated ({unit}) after {attempt+1} passes"
             
         elif ext == 'pdf':
             # PDF compression is less granular with PyPDF2
@@ -428,7 +483,9 @@ def compress():
                 'success': True,
                 'message': message,
                 'download_url': f'/download/{output_filename}',
-                'filename': output_filename
+                'filename': output_filename,
+                'original_dim': f"{orig_img.width}x{orig_img.height}",
+                'new_dim': f"{working_img.width}x{working_img.height}"
             })
         else:
             return jsonify({'success': False, 'error': message or "Processing failed"}), 500
